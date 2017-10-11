@@ -2,3 +2,5 @@
 corpus
 data
 resource
+*.pyc
+.ipynb_checkpoints/
