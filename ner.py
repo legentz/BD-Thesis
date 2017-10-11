@@ -1,6 +1,5 @@
 #-*- coding: utf-8 -*-
 
-import keras as K
 import tensorflow as tf
 from sklearn.externals import joblib
 import sys

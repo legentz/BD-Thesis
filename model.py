@@ -1,8 +1,15 @@
 #-*- coding: utf-8 -*-
-import keras as K
+# import keras as K
 import tensorflow as tf
 import numpy as np
 from keras.layers import Input
+from keras.layers.recurrent import LSTM
+from keras.layers.wrappers import Bidirectional
+from keras.layers.core import Dropout, Flatten, Permute, RepeatVector, Permute, Dense
+from keras.layers.merge import Concatenate, Dot
+from keras.models import Sequential
+from keras.backend import dropout, sigmoid, binary_crossentropy
+from keras.optimizers. import Adam
 
 class Model:
     def __init__(self, dev_test=False):
@@ -26,7 +33,7 @@ class Model:
         self.rep_dim += self.feature_dim # if --feature
         self.model_metrics = ['accuracy']
 
-        self.model = K.models.Sequential()
+        self.model = Sequential()
 
         # Placeholders with Tensorflow
         # self.keep_prob = K.backend.placeholder(dtype='float32') # K.backend.placeholder((2, 3), dtype='float32')
@@ -35,24 +42,24 @@ class Model:
         # self.target = K.backend.placeholder((None, self.target_dim), dtype='float32')
 
         # Trying to use ---- tensor
-        self.mention_representation = K.layers.Input(shape=(self.emb_dim,))
-        self.context = K.layers.Input(shape=(self.emb_dim,))
-        self.target = K.layers.Input(shape=(self.target_dim,))
+        self.mention_representation = Input(shape=(self.emb_dim,))
+        self.context = Input(shape=(self.emb_dim,))
+        self.target = Input(shape=(self.target_dim,))
 
         # Dropout and split context into L/R
         # Dropout with Keras has a problem... so we have to use tf.nn.dropout!
         # mention_representation_dropout = tf.nn.dropout(mention_representation, keep_prob)
-        self.mention_representation_dropout = K.backend.dropout(self.mention_representation, self.dropout_)
+        self.mention_representation_dropout = dropout(self.mention_representation, self.dropout_)
         self.left_context = self.context[:self.context_length]
         self.right_context = self.context[self.context_length + 1:]
 
         print 'Context placeholder created!'
 
         # if --attentive (LSTM + Attentions)
-        self.left_oneLSTM = K.layers.recurrent.LSTM(self.lstm_dim, return_sequences=True, return_state=True, stateful=True)(self.left_context) # stateful=True,
-        self.right_oneLSTM = K.layers.recurrent.LSTM(self.lstm_dim, return_sequences=True, return_state=True, stateful=True, go_backwards=True)(self.right_context) # stateful=True,
-        self.left_biLSTM = K.layers.wrappers.Bidirectional(self.left_oneLSTM, merge_mode='concat') # (self.left_context)
-        self.right_biLSTM = K.layers.wrappers.Bidirectional(self.right_oneLSTM, merge_mode='concat') # (self.right_context)
+        self.left_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, return_state=True, stateful=True)(self.left_context) # stateful=True,
+        self.right_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, return_state=True, stateful=True, go_backwards=True)(self.right_context) # stateful=True,
+        self.left_biLSTM = Bidirectional(self.left_oneLSTM, merge_mode='concat') # (self.left_context)
+        self.right_biLSTM = Bidirectional(self.right_oneLSTM, merge_mode='concat') # (self.right_context)
 
         print 'biLSTM created!'
 
@@ -81,17 +88,17 @@ class Model:
 
         # Missing --feature part...
         # ...
-        self.representation = K.layers.merge.Concatenate([self.mention_representation_dropout, self.context_representation], axis=1)
+        self.representation = Concatenate([self.mention_representation_dropout, self.context_representation], axis=1)
 
         # Missing --hier part...
         # ...
         self.W = self.create_weight_variable('hier_W', (self.rep_dim, self.target_dim))
-        self.logit = K.layers.merge.Dot(self.representation, self.W)
+        self.logit = Dot(self.representation, self.W)
 
-        self.distribution = K.sigmoid(self.logit)
+        self.distribution = sigmoid(self.logit)
 
-        self.loss_f = np.mean(K.backend.binary_crossentropy(self.logit, self.target, from_logits=True))
-        self.optimizer_adam = K.optimizers.Adam(lr=self.learning_rate)
+        self.loss_f = np.mean(binary_crossentropy(self.logit, self.target, from_logits=True))
+        self.optimizer_adam = Adam(lr=self.learning_rate)
 
     def set_attention_layer(self, model):
         # Set Attentions...

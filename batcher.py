@@ -2,7 +2,6 @@ import numpy as np
 from sklearn.externals import joblib
 import random
 
-
 class Batcher:
     def __init__(self,storage,data,batch_size,context_length,id2vec):
         self.context_length = context_length
