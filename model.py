@@ -15,12 +15,13 @@ from keras.optimizers import Adam
 from keras.initializers import Constant
 
 class Model:
-    def __init__(self, encoder='lstm', dev_test=False):
+    def __init__(self, encoder='lstm', compile_model=True, dev_test=False):
         assert(encoder in ['lstm', 'attentive'])
 
         # Input
         self.dev_test = dev_test
         self.encoder = encoder
+        self.compile_model = compile_model
 
         # Hyperparams
         self.context_length = 10
@@ -39,6 +40,7 @@ class Model:
         self.rep_dim = self.lstm_dim * 2 + self.emb_dim # if encoder is not 'averanging'
         # self.rep_dim += self.feature_dim # if --feature
         self.model_metrics = ['accuracy']
+        self.loss_f = 'binary_crossentropy'
 
         # Not needed anymore! We're using Functional API
         # self.model = Sequential()
@@ -64,29 +66,30 @@ class Model:
         self.right_context = Input(shape=(self.context_length,self.emb_dim,))
         self.target = Input(shape=(self.target_dim,))
 
-        self.mention_representation_dropout = dropout(self.mention_representation, self.dropout_)
+        # TODO: check this one if it's needed or not
+        # self.mention_representation_dropout = dropout(self.mention_representation, self.dropout_)
         # self.context = Input(batch_shape=(self.batch_size,self.context_length*2+1,self.emb_dim))
         # self.left_context = self.context[:self.context_length]
         # self.right_context = self.context[self.context_length + 1:]
 
-        print self.left_context.shape, self.right_context.shape
-        print 'Context placeholder created!'
+        print 'LContext, RContext, Mention'
+        print self.left_context.shape, self.right_context.shape, self.mention_representation.shape
 
         if self.encoder == 'lstm':
             self.L_LSTM, L_state1, L_state2 = LSTM(self.lstm_dim, return_sequences=True, return_state=True, input_shape=self.left_context.shape)(self.left_context)
             self.R_LSTM, R_state1, R_state2 = LSTM(self.lstm_dim, return_sequences=True, return_state=True, go_backwards=True)(self.right_context)
             self.context_representation = concatenate([L_state1, R_state1], axis=1)
 
-            print self.L_LSTM
-            print L_state1
-            print L_state2
-            print L_state1.shape
-            print L_state2.shape
-            print self.R_LSTM
-            print R_state1
-            print R_state2
-            print R_state1.shape
-            print R_state2.shape
+            # print self.L_LSTM
+            # print L_state1
+            # print L_state2
+            # print L_state1.shape
+            # print L_state2.shape
+            # print self.R_LSTM
+            # print R_state1
+            # print R_state2
+            # print R_state1.shape
+            # print R_state2.shape
 
         # if --attentive (LSTM + Attentions)
         if self.encoder == 'attentive':
@@ -99,8 +102,7 @@ class Model:
 
             # self.left_biLSTM = Bidirectional(self.left_oneLSTM)
             # self.right_biLSTM = Bidirectional(self.right_oneLSTM)ù
-
-            print 'biLSTM created!'
+            # print 'biLSTM created!'
 
             # !Dev!
             if self.dev_test:
@@ -119,15 +121,15 @@ class Model:
 
         # Missing --feature part...
         # ...
-        self.representation = concatenate([self.mention_representation_dropout, self.context_representation], axis=1)
+        self.representation = concatenate([self.mention_representation, self.context_representation], axis=1)
         self.representation = Dense(500)(self.representation) # Don't know if it's correct
 
         # Missing --hier part...
         # ...
         self.W = self.create_weight_variable('hier_W', (self.rep_dim, self.target_dim))
 
-        print self.W
-        print self.representation
+        # print self.W
+        # print self.representation
 
         # TODO: remove tf.matmul and seek for a Keras implementation
         self.logit = tf.matmul(self.representation, self.W)
@@ -136,33 +138,32 @@ class Model:
         self.distribution = sigmoid(self.logit)
 
         # Used during model compilation
-        self.loss_f = tf.reduce_mean(binary_crossentropy(self.logit, self.target, from_logits=True))
+        # self.loss_f = tf.reduce_mean(binary_crossentropy(self.logit, self.target, from_logits=True))
         self.optimizer_adam = Adam(lr=self.learning_rate)
 
         # Creating model
         # 'Tensor' object has no attribute '_keras_history'
-
-        print self.left_context._keras_history
-        print self.right_context._keras_history
-        print self.mention_representation._keras_history
-        print self.representation._keras_history
+        # print self.left_context._keras_history
+        # print self.right_context._keras_history
+        # print self.mention_representation._keras_history
+        # print self.representation._keras_history
 
         self.model = KerasModel(inputs=[self.left_context, self.right_context, self.mention_representation], outputs=[self.representation])
+
+        if self.compile_model:
+            print 'Compiling model...'
+            self.model.compile(optimizer=self.optimizer_adam, metrics=self.model_metrics, loss=self.loss_f, batch_size=self.batch_size)
 
     def set_attention_layer(self, model):
         # Set Attentions...
         return True
 
-    def build(self):
-        if self.model is not Null:
-            self.model.compile(optimizer=self.optimizer_adam, metrics=self.model_metrics, loss=self.loss_f, batch_size=self.batch_size)
-
     def get_model_summary(self):
-        if self.model is not Null:
+        if self.model is not None:
             return self.model.summary()
 
     def get_model(self):
-        if self.model is not Null:
+        if self.model is not None:
             return self.model
 
     def create_weight_variable(self, name, shape, pad=True):

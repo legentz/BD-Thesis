@@ -26,16 +26,14 @@ from batcher import Batcher
 # dev_batcher = Batcher(dev_dataset["storage"],dev_dataset["data"],dev_dataset["data"].shape[0],10,dicts["id2vec"])
 # test_batcher = Batcher(test_dataset["storage"],test_dataset["data"],test_dataset["data"].shape[0],10,dicts["id2vec"])
 
-# model = Model(dev_test=True).get_model()
-model = Model('lstm').get_model()
-model.build()
+model = Model(encoder='lstm', compile_model=True, dev_test=False).get_model()
 
 # model.train()
 
 print 'End.'
 # Todo: This will be the last piece of the code...
 #
-# Use generate_() function to emulate the Bather class in NFGEC
+# Use generate_() function to emulate the Bather class in NFGEC
 # used to train huge list of samples
 def generate_(path):
     while 1:
