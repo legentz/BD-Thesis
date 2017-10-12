@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import sys
 from keras.models import Model as KerasModel
+from keras.models import model_from_json
 from keras.layers import Input, add, Masking, Activation
 from keras.layers.recurrent import LSTM
 from keras.layers.wrappers import Bidirectional
@@ -13,6 +14,7 @@ from keras.models import Sequential
 from keras.backend import dropout, sigmoid, binary_crossentropy, variable, random_uniform_variable, constant, int_shape, dot, is_keras_tensor
 from keras.optimizers import Adam
 from keras.initializers import Constant
+import datetime
 
 class Model:
     def __init__(self, encoder='lstm', compile_model=True, dev_test=False):
@@ -168,7 +170,6 @@ class Model:
 
     def create_weight_variable(self, name, shape, pad=True):
         initial = np.random.uniform(-0.01, 0.01, size=shape)
-        # initial = random_uniform_variable(shape=shape, -0.01, 0.01)
 
         if pad == True:
             initial[0] = np.zeros(shape[1])
@@ -176,5 +177,29 @@ class Model:
         # TODO: insert Constant someway...
         # initial = variable(initial, name=name, dtype='float32')
         # initial = tf.constant_initializer(initial)
-        initial = constant(initial, shape=shape, name=name)
-        return initial
+        return constant(initial, shape=shape, name=name)
+
+    def save_to_json(self, options=None):
+        assert(options['json_path'] is not None)
+        assert(options['weights_path'] is not None)
+
+        if self.model is not None:
+            json = self.model.to_json()
+            
+            open(options['json_path'], 'w').write(json)
+
+            self.model.save_weights(options['weights_path'])
+
+    # TODO: load OUTSIDE the Model class
+    # def load_from_json_and_compile(self, options=None):
+    #     assert(options['json_path'] is not None)
+    #     assert(options['metrics'] is not None)
+    #     assert(options['loss'] is not None)
+    #     assert(options['optimizer'] is not None)
+    #     assert(options['weights_path'] is not None)
+
+    #     self.model = model_from_json(open(options['json_path']).read())
+    #     self.model.compile(loss=options['loss'], optimizer=options['optimizer'], metrics=options['metrics'])
+    #     self.model.load_weights(option['weights_path'])
+        
+    #     return self.model
