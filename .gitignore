@@ -5,3 +5,5 @@ resource
 *.pyc
 .ipynb_checkpoints/
 tfenv
+*.h5
+*.json
