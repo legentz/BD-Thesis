@@ -1,7 +1,7 @@
 #-*- coding: utf-8 -*-
 
 # Silence Tensorflow Info and Warning
-import os
+import os, sys, datetime
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 from model import KerasModel
@@ -36,32 +36,33 @@ print 'Creating the model'
 # TODO: external config as JS
 # TODO: change class name
 model_wrapper = KerasModel(encoder='lstm', compile_model=True)
-model = model_wrapper.get_model()
+# model = model_wrapper.get_model()
 
-# TODO: This will be the last piece of the code...
-# Use generate_() function to emulate the Bather class in NFGEC
-# used to train huge list of samples
-def generate_(train_batcher):
-    while 1:
-        context_data, mention_representation_data, target_data, feature_data = train_batcher.next()
+# def generate_(train_batcher):
+#     while 1:
+#         context_data, mention_representation_data, target_data, feature_data = train_batcher.next()
 
-        yield({
-            'input_1': context_data[:,:10,:],
-            'input_2': context_data[:,10+1:,:],
-            'input_3': mention_representation_data
-            }, {
-            'output_1': target_data
-            })
+#         yield({
+#             'input_1': context_data[:,:10,:],
+#             'input_2': context_data[:,10+1:,:],
+#             'input_3': mention_representation_data
+#             }, {
+#             'output_1': target_data
+#             })
 
-results = model.fit_generator(generate_(train_batcher), 2, epochs=1, shuffle=True, verbose=1) # steps_per_epoch=2000
+# results = model.fit_generator(generate_(train_batcher), 2, epochs=1, shuffle=True, verbose=1) # steps_per_epoch=2000
 
-print 'Training completed successfully'
-print results
+results = model_wrapper.train_model(train_batcher, steps_per_epoch=2, epochs=1, shuffle=True, verbose=1)
+
+print 'Model has been trained successfully'
+
+# Used to produce different backup .h5/.json
+now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
 
 # Saving model as HDF5 model
 model_wrapper.save_to_json({
-    'json_path': 'model_saved.json',
-    'weights_path': 'model_saved_weights.h5'
+    'json_path': 'model_saved' + now + '.json',
+    'weights_path': 'model_saved_weights' + now + '.h5'
     })
 
 print 'Model has been saved'

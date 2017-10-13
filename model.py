@@ -13,8 +13,25 @@ from keras.models import Sequential
 from keras.backend import dropout, sigmoid, binary_crossentropy, variable, random_uniform_variable, constant, int_shape, dot, is_keras_tensor
 from keras.optimizers import Adam
 from keras.initializers import Constant
-import datetime
 
+def create_weight_variable(name, shape, pad=True):
+    initial = np.random.uniform(-0.01, 0.01, size=shape)
+
+    if pad == True:
+        initial[0] = np.zeros(shape[1])
+
+    # TODO: insert Constant someway...
+    # initial = variable(initial, name=name, dtype='float32')
+    # initial = tf.constant_initializer(initial)
+    return constant(initial, shape=shape, name=name)
+
+def lambda_(x, r_dim, t_dim):
+    W = create_weight_variable('hier_W', (r_dim, t_dim))
+    dot_ = dot(x, W)
+    
+    return sigmoid(dot_)
+
+# Keras model wrapper
 class KerasModel:
     # def __init__(self, load_model=options, encoder='lstm', compile_model=True):
     def __init__(self, **kwargs):
@@ -39,8 +56,8 @@ class KerasModel:
         self.attention_dim = 100 # dim of attention module
         self.feature_dim = 50 # dim of feature representation
         self.feature_input_dim = 70
-        self.rep_dim = self.lstm_dim * 2 + self.emb_dim # if encoder is not 'averanging'
-        # self.rep_dim += self.feature_dim # if --feature
+        self.representation_dim = self.lstm_dim * 2 + self.emb_dim # if encoder is not 'averanging'
+        # self.representation_dim += self.feature_dim # if --feature
         self.model_metrics = ['accuracy']
         self.loss_f = 'binary_crossentropy'
 
@@ -50,25 +67,6 @@ class KerasModel:
             self.load_from_json_and_compile(self.load_model)
 
         else:
-
-            # Not needed anymore! We're using Functional API
-            # self.model = Sequential()
-
-            # Placeholders with Tensorflow
-            # self.keep_prob = K.backend.placeholder(dtype='float32') # K.backend.placeholder((2, 3), dtype='float32')
-            # self.mention_representation = K.backend.placeholder((None, self.emb_dim), dtype='float32')
-            # self.context = [K.backend.placeholder((None, self.emb_dim), dtype='float32') for _ in range((self.context_length * 2) + 1)]
-            # self.target = K.backend.placeholder((None, self.target_dim), dtype='float32')
-
-            # Dropout and split context into L/R
-            # Dropout with Keras has a problem... so we have to use tf.nn.dropout!
-            # mention_representation_dropout = tf.nn.dropout(mention_representation, keep_prob)
-
-            # batch_shape needed when RNN is stateful
-            # self.mention_representation = Input(shape=(self.emb_dim,))
-            # self.left_context = Input(batch_shape=(self.batch_size,self.context_length,self.emb_dim))
-            # self.right_context = Input(batch_shape=(self.batch_size,self.context_length,self.emb_dim))
-            # self.target = Input(batch_shape=(self.batch_size,self.target_dim))
 
             # TODO: check for the right shape(s)
             self.mention_representation = Input(shape=(self.emb_dim,), name='input_3')
@@ -86,6 +84,7 @@ class KerasModel:
             print 'right_context: ', int_shape(self.right_context),
             print 'mention_representation: ', int_shape(self.mention_representation)
 
+            # LSTM
             if self.encoder == 'lstm':
                 self.L_LSTM, L_state1, L_state2 = LSTM(self.lstm_dim, return_sequences=True, return_state=True, input_shape=int_shape(self.left_context))(self.left_context)
                 self.R_LSTM, R_state1, R_state2 = LSTM(self.lstm_dim, return_sequences=True, return_state=True, go_backwards=True)(self.right_context)
@@ -99,10 +98,6 @@ class KerasModel:
                 self.RF_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True)(self.right_context)
                 self.RB_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, go_backwards=True)(self.right_context)
                 self.R_biLSTM = Concatenate([self.RF_oneLSTM, self.RB_oneLSTM])
-
-                # self.left_biLSTM = Bidirectional(self.left_oneLSTM)
-                # self.right_biLSTM = Bidirectional(self.right_oneLSTM)ù
-                # print 'biLSTM created!'
 
                 self.LR_biLSTM = Concatenate([self.L_biLSTM, self.R_biLSTM])
 
@@ -121,15 +116,17 @@ class KerasModel:
 
             # TODO: Missing --hier part...
             # ...
-            self.W = self.create_weight_variable('hier_W', (self.rep_dim, self.target_dim))
-            # self.W_ = Dense(113, input_shape=(self.rep_dim, self.target_dim))(self.W)
-            # self.W = Dense(113, kernel_initializer='random_uniform', input_shape=(self.rep_dim, self.target_dim)) # TODO: need to pad [0]
+            self.W = create_weight_variable('hier_W', (self.representation_dim, self.target_dim))
+            # self.W_ = Dense(113, input_shape=(self.representation_dim, self.target_dim))(self.W)
+            # self.W = Dense(113, kernel_initializer='random_uniform', input_shape=(self.representation_dim, self.target_dim)) # TODO: need to pad [0]
 
             # self.logit = tf.matmul(self.representation, self.W)
             # self.logit = dot(self.representation, self.W)
             # self.logit_lambda = Lambda(self.lambda_)(self.representation)
             # self.logit = Dot(self.representation, self.W) TODO: try to use this instead of Lambda
-            self.distribution = Lambda(self.lambda_, name='output_1')(self.representation) # dot and sigmoid
+            self.distribution_ = Lambda(lambda_, name='output_1')
+            self.distribution_.arguments = {'r_dim': self.representation_dim, 't_dim': self.target_dim}
+            self.distribution = self.distribution_(self.representation) # dot and sigmoid
 
             # Used during prediction phase
             # self.distribution = sigmoid(self.logit)
@@ -153,14 +150,9 @@ class KerasModel:
             
             self.model.compile(optimizer=self.optimizer_adam, metrics=self.model_metrics, loss=self.loss_f)
 
-    def set_attention_layer(self, model):
-        # Set Attentions...
-        return True
-
-    def lambda_(self, x):
-        W = self.create_weight_variable('hier_W', (self.rep_dim, self.target_dim))
-        dot_ = dot(x, W)
-        return sigmoid(dot_)
+    # def set_attention_layer(self, model):
+    #     # Set Attentions...
+    #     return True
 
     def get_model_summary(self):
         if self.model is not None:
@@ -169,17 +161,6 @@ class KerasModel:
     def get_model(self):
         if self.model is not None:
             return self.model
-
-    def create_weight_variable(self, name, shape, pad=True):
-        initial = np.random.uniform(-0.01, 0.01, size=shape)
-
-        if pad == True:
-            initial[0] = np.zeros(shape[1])
-
-        # TODO: insert Constant someway...
-        # initial = variable(initial, name=name, dtype='float32')
-        # initial = tf.constant_initializer(initial)
-        return constant(initial, shape=shape, name=name)
 
     def save_to_json(self, options=None):
         assert(options['json_path'] is not None)
@@ -192,7 +173,6 @@ class KerasModel:
 
             self.model.save_weights(options['weights_path'])
 
-    # TODO: load OUTSIDE the Model class
     def load_from_json_and_compile(self, options=None):
         assert(options is not None)
         assert(options['json_path'] is not None)
@@ -206,3 +186,21 @@ class KerasModel:
         self.model.load_weights(option['weights_path'])
         
         return self.model
+
+    def train_model(self, batcher, steps_per_epoch=1, epochs=1, shuffle=False, verbose=0):
+        assert(batcher is not None)
+
+        def _generate(batcher):
+            while 1:
+                context_data, mention_representation_data, target_data, feature_data = batcher.next()
+
+                yield({
+                        'input_1': context_data[:,:self.context_length,:],
+                        'input_2': context_data[:,self.context_length+1:,:],
+                        'input_3': mention_representation_data
+                    }, {
+                        'output_1': target_data
+                    })
+
+        if self.model is not None:
+            return self.model.fit_generator(_generate(batcher), steps_per_epoch, epochs=epochs, shuffle=shuffle, verbose=verbose) # steps_per_epoch=2000
