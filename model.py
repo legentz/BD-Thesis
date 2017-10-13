@@ -1,9 +1,8 @@
 #-*- coding: utf-8 -*-
-# import keras as K
 import tensorflow as tf
 import numpy as np
 import sys
-from keras.models import Model as KerasModel
+from keras.models import Model
 from keras.models import model_from_json
 from keras.layers import Input, add, Masking, Activation
 from keras.layers.recurrent import LSTM
@@ -16,14 +15,15 @@ from keras.optimizers import Adam
 from keras.initializers import Constant
 import datetime
 
-class Model:
-    def __init__(self, encoder='lstm', compile_model=True, dev_test=False):
-        assert(encoder in ['lstm', 'attentive'])
-
+class KerasModel:
+    # def __init__(self, load_model=options, encoder='lstm', compile_model=True):
+    def __init__(self, **kwargs):
         # Class input
-        self.dev_test = dev_test
-        self.encoder = encoder
-        self.compile_model = compile_model
+        self.load_model = kwargs['load_model'] if 'load_model' in kwargs else None
+        self.encoder = kwargs['encoder'] if 'encoder' in kwargs else None
+
+        # assert(encoder in ['lstm', 'attentive'])
+        # self.compile_model = compile_model
 
         # Hyperparams
         self.context_length = 10
@@ -44,111 +44,113 @@ class Model:
         self.model_metrics = ['accuracy']
         self.loss_f = 'binary_crossentropy'
 
-        # Not needed anymore! We're using Functional API
-        # self.model = Sequential()
+        # Loading and returnin model
+        if self.load_model is not None:
+            print 'Loading model from JSON...'
+            self.load_from_json_and_compile(self.load_model)
 
-        # Placeholders with Tensorflow
-        # self.keep_prob = K.backend.placeholder(dtype='float32') # K.backend.placeholder((2, 3), dtype='float32')
-        # self.mention_representation = K.backend.placeholder((None, self.emb_dim), dtype='float32')
-        # self.context = [K.backend.placeholder((None, self.emb_dim), dtype='float32') for _ in range((self.context_length * 2) + 1)]
-        # self.target = K.backend.placeholder((None, self.target_dim), dtype='float32')
+        else:
 
-        # Dropout and split context into L/R
-        # Dropout with Keras has a problem... so we have to use tf.nn.dropout!
-        # mention_representation_dropout = tf.nn.dropout(mention_representation, keep_prob)
+            # Not needed anymore! We're using Functional API
+            # self.model = Sequential()
 
-        # batch_shape needed when RNN is stateful
-        # self.mention_representation = Input(shape=(self.emb_dim,))
-        # self.left_context = Input(batch_shape=(self.batch_size,self.context_length,self.emb_dim))
-        # self.right_context = Input(batch_shape=(self.batch_size,self.context_length,self.emb_dim))
-        # self.target = Input(batch_shape=(self.batch_size,self.target_dim))
+            # Placeholders with Tensorflow
+            # self.keep_prob = K.backend.placeholder(dtype='float32') # K.backend.placeholder((2, 3), dtype='float32')
+            # self.mention_representation = K.backend.placeholder((None, self.emb_dim), dtype='float32')
+            # self.context = [K.backend.placeholder((None, self.emb_dim), dtype='float32') for _ in range((self.context_length * 2) + 1)]
+            # self.target = K.backend.placeholder((None, self.target_dim), dtype='float32')
 
-        # TODO: check for the right shape(s)
-        self.mention_representation = Input(shape=(self.emb_dim,), name='input_3')
-        self.left_context = Input(shape=(self.context_length,self.emb_dim,), name='input_2')
-        self.right_context = Input(shape=(self.context_length,self.emb_dim,), name='input_1')
-        self.target = Input(shape=(self.target_dim,))
+            # Dropout and split context into L/R
+            # Dropout with Keras has a problem... so we have to use tf.nn.dropout!
+            # mention_representation_dropout = tf.nn.dropout(mention_representation, keep_prob)
 
-        # TODO: check this one if it's needed or not
-        # self.mention_representation_dropout = dropout(self.mention_representation, self.dropout_)
-        # self.context = Input(batch_shape=(self.batch_size,self.context_length*2+1,self.emb_dim))
-        # self.left_context = self.context[:self.context_length]
-        # self.right_context = self.context[self.context_length + 1:]
+            # batch_shape needed when RNN is stateful
+            # self.mention_representation = Input(shape=(self.emb_dim,))
+            # self.left_context = Input(batch_shape=(self.batch_size,self.context_length,self.emb_dim))
+            # self.right_context = Input(batch_shape=(self.batch_size,self.context_length,self.emb_dim))
+            # self.target = Input(batch_shape=(self.batch_size,self.target_dim))
 
-        print 'left_context: ', int_shape(self.left_context),
-        print 'right_context: ', int_shape(self.right_context),
-        print 'mention_representation: ', int_shape(self.mention_representation)
+            # TODO: check for the right shape(s)
+            self.mention_representation = Input(shape=(self.emb_dim,), name='input_3')
+            self.left_context = Input(shape=(self.context_length,self.emb_dim,), name='input_2')
+            self.right_context = Input(shape=(self.context_length,self.emb_dim,), name='input_1')
+            self.target = Input(shape=(self.target_dim,))
 
-        if self.encoder == 'lstm':
-            self.L_LSTM, L_state1, L_state2 = LSTM(self.lstm_dim, return_sequences=True, return_state=True, input_shape=int_shape(self.left_context))(self.left_context)
-            self.R_LSTM, R_state1, R_state2 = LSTM(self.lstm_dim, return_sequences=True, return_state=True, go_backwards=True)(self.right_context)
-            self.context_representation = concatenate([L_state1, R_state1], axis=1)
+            # TODO: check this one if it's needed or not
+            # self.mention_representation_dropout = dropout(self.mention_representation, self.dropout_)
+            # self.context = Input(batch_shape=(self.batch_size,self.context_length*2+1,self.emb_dim))
+            # self.left_context = self.context[:self.context_length]
+            # self.right_context = self.context[self.context_length + 1:]
 
-        # LSTM + Attentions
-        if self.encoder == 'attentive':
-            self.LF_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, input_shape=self.left_context.shape)(self.left_context)
-            self.LB_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, go_backwards=True)(self.left_context)
-            self.L_biLSTM = Concatenate([self.LF_oneLSTM, self.LB_oneLSTM])
-            self.RF_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True)(self.right_context)
-            self.RB_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, go_backwards=True)(self.right_context)
-            self.R_biLSTM = Concatenate([self.RF_oneLSTM, self.RB_oneLSTM])
+            print 'left_context: ', int_shape(self.left_context),
+            print 'right_context: ', int_shape(self.right_context),
+            print 'mention_representation: ', int_shape(self.mention_representation)
 
-            # self.left_biLSTM = Bidirectional(self.left_oneLSTM)
-            # self.right_biLSTM = Bidirectional(self.right_oneLSTM)ù
-            # print 'biLSTM created!'
+            if self.encoder == 'lstm':
+                self.L_LSTM, L_state1, L_state2 = LSTM(self.lstm_dim, return_sequences=True, return_state=True, input_shape=int_shape(self.left_context))(self.left_context)
+                self.R_LSTM, R_state1, R_state2 = LSTM(self.lstm_dim, return_sequences=True, return_state=True, go_backwards=True)(self.right_context)
+                self.context_representation = concatenate([L_state1, R_state1], axis=1)
 
-            # TODO: remove (?)
-            if self.dev_test:
-                print 'Got murdered :('
-                sys.exit(1)
+            # LSTM + Attentions
+            if self.encoder == 'attentive':
+                self.LF_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, input_shape=self.left_context.shape)(self.left_context)
+                self.LB_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, go_backwards=True)(self.left_context)
+                self.L_biLSTM = Concatenate([self.LF_oneLSTM, self.LB_oneLSTM])
+                self.RF_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True)(self.right_context)
+                self.RB_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, go_backwards=True)(self.right_context)
+                self.R_biLSTM = Concatenate([self.RF_oneLSTM, self.RB_oneLSTM])
 
-            self.LR_biLSTM = Concatenate([self.L_biLSTM, self.R_biLSTM])
+                # self.left_biLSTM = Bidirectional(self.left_oneLSTM)
+                # self.right_biLSTM = Bidirectional(self.right_oneLSTM)ù
+                # print 'biLSTM created!'
 
-            self.attention = Dense(self.attention_dim, activation='tanh', input_shape=(self.lstm_dim*2,))(self.LR_biLSTM)
-            self.attention = Flatten()(self.attention)
-            self.attention = Activation('softmax')(self.attention)
-            self.attention = RepeatVector(self.lstm_dim)(self.attention)
-            self.attention = Permute([2, 1])(self.attention)
+                self.LR_biLSTM = Concatenate([self.L_biLSTM, self.R_biLSTM])
 
-            self.context_representation = merge([self.activations, self.attention], mode='mul')
+                self.attention = Dense(self.attention_dim, activation='tanh', input_shape=(self.lstm_dim*2,))(self.LR_biLSTM)
+                self.attention = Flatten()(self.attention)
+                self.attention = Activation('softmax')(self.attention)
+                self.attention = RepeatVector(self.lstm_dim)(self.attention)
+                self.attention = Permute([2, 1])(self.attention)
 
-        # TODO: Missing --feature part...
-        # ...
-        self.representation = concatenate([self.mention_representation, self.context_representation], axis=1) # is_keras_tensor=True
-        # self.representation = Dense(500)(self.representation) # TODO; Don't know if it's needed
+                self.context_representation = merge([self.activations, self.attention], mode='mul')
 
-        # TODO: Missing --hier part...
-        # ...
-        self.W = self.create_weight_variable('hier_W', (self.rep_dim, self.target_dim))
-        # self.W_ = Dense(113, input_shape=(self.rep_dim, self.target_dim))(self.W)
-        # self.W = Dense(113, kernel_initializer='random_uniform', input_shape=(self.rep_dim, self.target_dim)) # TODO: need to pad [0]
+            # TODO: Missing --feature part...
+            # ...
+            self.representation = concatenate([self.mention_representation, self.context_representation], axis=1) # is_keras_tensor=True
+            # self.representation = Dense(500)(self.representation) # TODO; Don't know if it's needed
 
-        # self.logit = tf.matmul(self.representation, self.W)
-        # self.logit = dot(self.representation, self.W)
-        # self.logit_lambda = Lambda(self.lambda_)(self.representation)
-        # self.logit = Dot(self.representation, self.W) TODO: try to use this instead of Lambda
-        self.distribution = Lambda(self.lambda_, name='output_1')(self.representation) # dot and sigmoid
+            # TODO: Missing --hier part...
+            # ...
+            self.W = self.create_weight_variable('hier_W', (self.rep_dim, self.target_dim))
+            # self.W_ = Dense(113, input_shape=(self.rep_dim, self.target_dim))(self.W)
+            # self.W = Dense(113, kernel_initializer='random_uniform', input_shape=(self.rep_dim, self.target_dim)) # TODO: need to pad [0]
 
-        # Used during prediction phase
-        # self.distribution = sigmoid(self.logit)
-        # self.distribution = Dense(self.target_dim, activation='sigmoid')(self.logit_lambda)
-        # self.distribution = Activation('sigmoid')(self.logit_lambda)
+            # self.logit = tf.matmul(self.representation, self.W)
+            # self.logit = dot(self.representation, self.W)
+            # self.logit_lambda = Lambda(self.lambda_)(self.representation)
+            # self.logit = Dot(self.representation, self.W) TODO: try to use this instead of Lambda
+            self.distribution = Lambda(self.lambda_, name='output_1')(self.representation) # dot and sigmoid
 
-        print 'Is representation a Keras Tensor? ', is_keras_tensor(self.representation)
-        print 'Is W a Keras Tensor? ', is_keras_tensor(self.W)
-        # print 'Is logit_lambda a Keras Tensor? ', is_keras_tensor(self.logit_lambda)
-        print 'Is distribution a Keras Tensor? ', is_keras_tensor(self.distribution)
+            # Used during prediction phase
+            # self.distribution = sigmoid(self.logit)
+            # self.distribution = Dense(self.target_dim, activation='sigmoid')(self.logit_lambda)
+            # self.distribution = Activation('sigmoid')(self.logit_lambda)
 
-        # Used during model compilation
-        # self.loss_f = tf.reduce_mean(binary_crossentropy(self.logit, self.target, from_logits=True))
-        self.optimizer_adam = Adam(lr=self.learning_rate)
+            print 'Is representation a Keras Tensor? ', is_keras_tensor(self.representation)
+            print 'Is W a Keras Tensor? ', is_keras_tensor(self.W)
+            # print 'Is logit_lambda a Keras Tensor? ', is_keras_tensor(self.logit_lambda)
+            print 'Is distribution a Keras Tensor? ', is_keras_tensor(self.distribution)
 
-        # Creating model...
-        self.model = KerasModel(inputs=[self.left_context, self.right_context, self.mention_representation], outputs=self.distribution)
+            # Used during model compilation
+            # self.loss_f = tf.reduce_mean(binary_crossentropy(self.logit, self.target, from_logits=True))
+            self.optimizer_adam = Adam(lr=self.learning_rate)
 
-        # ...and compile!
-        if self.compile_model:
+            # Creating model...
+            self.model = Model(inputs=[self.left_context, self.right_context, self.mention_representation], outputs=self.distribution)
+
+            # Compiling model...
             print 'Compiling model...'
+            
             self.model.compile(optimizer=self.optimizer_adam, metrics=self.model_metrics, loss=self.loss_f)
 
     def set_attention_layer(self, model):
@@ -191,15 +193,16 @@ class Model:
             self.model.save_weights(options['weights_path'])
 
     # TODO: load OUTSIDE the Model class
-    # def load_from_json_and_compile(self, options=None):
-    #     assert(options['json_path'] is not None)
-    #     assert(options['metrics'] is not None)
-    #     assert(options['loss'] is not None)
-    #     assert(options['optimizer'] is not None)
-    #     assert(options['weights_path'] is not None)
+    def load_from_json_and_compile(self, options=None):
+        assert(options is not None)
+        assert(options['json_path'] is not None)
+        assert(options['metrics'] is not None)
+        assert(options['loss'] is not None)
+        assert(options['optimizer'] is not None)
+        assert(options['weights_path'] is not None)
 
-    #     self.model = model_from_json(open(options['json_path']).read())
-    #     self.model.compile(loss=options['loss'], optimizer=options['optimizer'], metrics=options['metrics'])
-    #     self.model.load_weights(option['weights_path'])
+        self.model = model_from_json(open(options['json_path']).read())
+        self.model.compile(loss=options['loss'], optimizer=options['optimizer'], metrics=options['metrics'])
+        self.model.load_weights(option['weights_path'])
         
-    #     return self.model
+        return self.model

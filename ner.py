@@ -1,9 +1,14 @@
 #-*- coding: utf-8 -*-
-from model import Model
+
+# Silence Tensorflow Info and Warning
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+from model import KerasModel
 from loader import Loader
 from batcher import Batcher
 
-# Check for device in use
+# TODO: Check for device in use (pretty-printed)
 # from tensorflow.python.client import device_lib
 # print device_lib.list_local_devices()
 
@@ -30,7 +35,8 @@ print 'Creating the model'
 
 # TODO: external config as JS
 # TODO: change class name
-model = Model(encoder='lstm', compile_model=True, dev_test=False).get_model()
+model_wrapper = KerasModel(encoder='lstm', compile_model=True)
+model = model_wrapper.get_model()
 
 # TODO: This will be the last piece of the code...
 # Use generate_() function to emulate the Bather class in NFGEC
@@ -47,13 +53,13 @@ def generate_(train_batcher):
             'output_1': target_data
             })
 
-results = model.fit_generator(generate_(train_batcher), 2000, epochs=5, shuffle=True, verbose=1) # steps_per_epoch=2000
+results = model.fit_generator(generate_(train_batcher), 2, epochs=1, shuffle=True, verbose=1) # steps_per_epoch=2000
 
 print 'Training completed successfully'
 print results
 
 # Saving model as HDF5 model
-model.save_to_json({
+model_wrapper.save_to_json({
     'json_path': 'model_saved.json',
     'weights_path': 'model_saved_weights.h5'
     })
@@ -73,3 +79,12 @@ test_to_predict = model.predict_on_batch({
 
 print test_to_predict
 print target_data
+
+# TODO: Solve Lambda layer error during model loading
+# model_wrapper = KerasModel(load_model={
+#     'json_path': 'model_saved.json',
+#     'metrics': ['accuracy'],
+#     'loss': 'binary_crossentropy',
+#     'optimizer': 'adam',
+#     'weights_path': 'model_saved_weights.h5'
+# })
