@@ -34,42 +34,10 @@ def lambda_(x, r_dim, t_dim):
     
     return sigmoid(dot_)
 
-# Note on using statefulness in RNNs
-# You can set RNN layers to be 'stateful', which means that the states
-# computed for the samples in one batch will be reused as initial states
-# for the samples in the next batch. This assumes a one-to-one mapping
-# between samples in different successive batches.
-
-# To enable statefulness:
-#     - specify `stateful=True` in the layer constructor.
-#     - specify a fixed batch size for your model, by passing
-#         if sequential model:
-#           `batch_input_shape=(...)` to the first layer in your model.
-#         else for functional model with 1 or more Input layers:
-#           `batch_shape=(...)` to all the first layers in your model.
-#         This is the expected shape of your inputs
-#         *including the batch size*.
-#         It should be a tuple of integers, e.g. `(32, 10, 100)`.
-#     - specify `shuffle=False` when calling fit().
-
-# To reset the states of your model, call `.reset_states()` on either
-# a specific layer, or on your entire model.
-
-# Note on specifying the initial state of RNNs
-# You can specify the initial state of RNN layers symbolically by
-# calling them with the keyword argument `initial_state`. The value of
-# `initial_state` should be a tensor or list of tensors representing
-# the initial state of the RNN layer.
-
-# You can specify the initial state of RNN layers numerically by
-# calling `reset_states` with the keyword argument `states`. The value of
-# `states` should be a numpy array or list of numpy arrays representing
-# the initial state of the RNN layer.
-
 class KerasModel:
     def __init__(self, **kwargs):
 
-        # Class input
+        # **kwargs
         self.load_model = kwargs['load_model'] if 'load_model' in kwargs else None
         self.encoder = kwargs['encoder'] if 'encoder' in kwargs else None
         self.feature = kwargs['feature'] if 'feature' in kwargs else None
@@ -77,7 +45,6 @@ class KerasModel:
         # Hyperparams
         self.context_length = kwargs['context_length'] if 'context_length' in kwargs else 5
         self.batch_size = kwargs['batch_size'] if 'batch_size' in kwargs else 32
-
         self.emb_dim = 300
         self.target_dim = 113
         self.dropout_ = 0.5
@@ -122,31 +89,24 @@ class KerasModel:
 
             # LSTM
             if self.encoder == 'lstm':
-                self.L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=0.5, input_shape=int_shape(self.left_context))(self.left_context)
-                self.R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=0.5, go_backwards=True)(self.right_context)
-
-                # Stateful LSTM: need to use fixed batch size (batch_input_shape)
-                # self.L_LSTM, l_1, l_2 = LSTM(self.lstm_dim, return_state=True, stateful=True, input_shape=int_shape(self.left_context))(self.left_context)
-                # self.R_LSTM, r_1, r_2 = LSTM(self.lstm_dim, return_state=True, stateful=True, go_backwards=True)(self.right_context)
+                self.L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=0.5, input_shape=int_shape(self.left_context))
+                self.L_LSTM = self.L_LSTM(self.left_context)
+                self.R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=0.5, go_backwards=True)
+                self.R_LSTM = self.R_LSTM(self.right_context)
 
                 self.context_representation = concatenate([self.L_LSTM, self.R_LSTM], axis=1)
 
             # Averaging
             if self.encoder == 'averaging':
-                self.context_representation = Averaging(concat_axis=1, sum_axis=1)([self.left_context, self.right_context])
+                self.context_representation = Averaging(concat_axis=1, sum_axis=1)
+                self.context_representation = self.context_representation([self.left_context, self.right_context])
 
             # LSTM + Attentions
             if self.encoder == 'attentive':
-                # self.LF_oneLSTM = LSTM(self.lstm_dim, input_shape=int_shape(self.left_context))(self.left_context)
-                # self.LB_oneLSTM = LSTM(self.lstm_dim, go_backwards=True)(self.left_context)
-                # self.L_biLSTM = Concatenate([self.LF_oneLSTM, self.LB_oneLSTM])
-
-                # self.RF_oneLSTM = LSTM(self.lstm_dim, input_shape=int_shape(self.right_context))(self.right_context)
-                # self.RB_oneLSTM = LSTM(self.lstm_dim, go_backwards=True)(self.right_context)
-                # self.R_biLSTM = Concatenate([self.RF_oneLSTM, self.RB_oneLSTM])
-
-                self.L_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(self.left_context)))(self.left_context)
-                self.R_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(self.left_context)))(self.right_context)
+                self.L_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(self.left_context)))
+                self.L_biLSTM = self.L_biLSTM(self.left_context)
+                self.R_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(self.left_context)))
+                self.R_biLSTM = self.R_biLSTM(self.right_context)
 
                 self.LR_biLSTM = add([self.L_biLSTM, self.R_biLSTM])
 
@@ -161,7 +121,9 @@ class KerasModel:
                 self.feature_input = Input(shape=(self.feature_input_dim,), dtype='int32', name='input_4')
                 self.feature_representation = Feature(F_emb_shape=(self.feature_size, self.feature_dim), F_emb_name='feat_emb', reduce_sum_axis=1, dropout=self.dropout_)
                 self.feature_representation = self.feature_representation(self.feature_input)
+                
                 self.representation = concatenate([self.mention_representation_dropout, self.context_representation, self.feature_representation], axis=1) # is_keras_tensor=True
+           
             else:
                 self.representation = concatenate([self.mention_representation_dropout, self.context_representation], axis=1) # is_keras_tensor=True
 
