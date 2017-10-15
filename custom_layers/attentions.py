@@ -3,36 +3,28 @@
 from keras import backend as K
 from keras.engine.topology import Layer
 from keras import initializers, regularizers, constraints
+from utils import random_uniform_custom
 
 # This solves issues of pop(-2) overflow in Tensorflow environment
 def dot_(x, kernel):
     return K.squeeze(K.dot(x, K.expand_dims(kernel)), axis=-1)
 
 class Attention(Layer):
-    def __init__(self, W_regularizer=None, u_regularizer=None, W_constraint=None, u_constraint=None, **kwargs):
-
-        self.supports_masking = True
-        self.init = initializers.get('random_uniform')
-
-        self.W_regularizer = regularizers.get(W_regularizer)
-        self.W_constraint = constraints.get(W_constraint)
-        self.u_regularizer = regularizers.get(u_regularizer)
-        self.u_constraint = constraints.get(u_constraint)
+    def __init__(self, **kwargs):
 
         super(Attention, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.W = self.add_weight((input_shape[-1], input_shape[-1],),
-                                 initializer=self.init,
-                                 name='{}_W'.format(self.name),
-                                 regularizer=self.W_regularizer,
-                                 constraint=self.W_constraint)
+        shape_W = (input_shape[-1], input_shape[-1],)
+        shape_u = (input_shape[-1],)
 
-        self.u = self.add_weight((input_shape[-1],),
-                                 initializer=self.init,
-                                 name='{}_u'.format(self.name),
-                                 regularizer=self.u_regularizer,
-                                 constraint=self.u_constraint)
+        self.W = self.add_weight(shape_W,
+                                 initializer=random_uniform_custom(shape_W, -0.01, 0.01),
+                                 name='{}_W'.format(self.name))
+
+        self.u = self.add_weight(shape_u,
+                                 initializer=random_uniform_custom(shape_u, -0.01, 0.01),
+                                 name='{}_u'.format(self.name))
 
         super(Attention, self).build(input_shape)
 
