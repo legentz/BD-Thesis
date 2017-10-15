@@ -14,6 +14,7 @@ from keras.optimizers import Adam
 from keras.initializers import Constant
 from custom_layers.attentions import Attention
 from custom_layers.averaging import Averaging
+from custom_layers.features import Feature
 
 def new_tensor_(name, shape):
     initial = np.random.uniform(-0.01, 0.01, size=shape)
@@ -71,6 +72,7 @@ class KerasModel:
         # Class input
         self.load_model = kwargs['load_model'] if 'load_model' in kwargs else None
         self.encoder = kwargs['encoder'] if 'encoder' in kwargs else None
+        self.feature = kwargs['feature'] if 'feature' in kwargs else None
 
         # Hyperparams
         self.context_length = kwargs['context_length'] if 'context_length' in kwargs else 5
@@ -87,8 +89,8 @@ class KerasModel:
         self.feature_input_dim = 70
         self.representation_dim = self.lstm_dim*2 + self.emb_dim if self.encoder != 'averaging' else self.emb_dim*3
 
-        # if --feature
-        # self.representation_dim += self.feature_dim
+        if self.feature:
+            self.representation_dim += self.feature_dim
 
         # TODO: hook.acc_hook
         self.model_metrics = ['accuracy', 'mae']
@@ -109,6 +111,9 @@ class KerasModel:
             self.left_context = Input(shape=(self.context_length, self.emb_dim,), name='input_1')
             self.right_context = Input(shape=(self.context_length, self.emb_dim,), name='input_2')
             self.target = Input(shape=(self.target_dim,))
+
+            # Dropout over mention_representation
+            self.mention_representation_dropout = Dropout(self.dropout_)(self.mention_representation)
 
             # Context as list of Input tensors
             # self.context = [Input(batch_shape=(self.batch_size,self.emb_dim)) for i in range(self.context_length*2+1)]
@@ -151,10 +156,14 @@ class KerasModel:
                 # self.context_representation = dot(self.LR_biLSTM, xxx)
                 self.context_representation = attention_output
 
-            # TODO: Missing --feature part...
-            # ...
-            self.mention_representation_dropout = Dropout(self.dropout_)(self.mention_representation)
-            self.representation = concatenate([self.mention_representation_dropout, self.context_representation], axis=1) # is_keras_tensor=True
+            # Logistic Regression
+            if self.feature:
+                self.feature_input = Input(shape=(self.feature_input_dim,), dtype='int32', name='input_4')
+                self.feature_representation = Feature(F_emb_shape=(self.feature_size, self.feature_dim), F_emb_name='feat_emb', reduce_sum_axis=1, dropout=self.dropout_)
+                self.feature_representation = self.feature_representation(self.feature_input)
+                self.representation = concatenate([self.mention_representation_dropout, self.context_representation, self.feature_representation], axis=1) # is_keras_tensor=True
+            else:
+                self.representation = concatenate([self.mention_representation_dropout, self.context_representation], axis=1) # is_keras_tensor=True
 
             # TODO: Missing --hier part...
             # ...
@@ -170,8 +179,14 @@ class KerasModel:
             # Used during model compilation
             self.optimizer_adam = Adam(lr=self.learning_rate)
 
+            # Prepare inputs list
+            if self.feature:
+                inputs = [self.left_context, self.right_context, self.mention_representation, self.feature_input]
+            else:
+                inputs = [self.left_context, self.right_context, self.mention_representation]
+
             # Creation and compilation
-            self.model = Model(inputs=[self.left_context, self.right_context, self.mention_representation], outputs=self.distribution)       
+            self.model = Model(inputs=inputs, outputs=self.distribution)       
             self.model.compile(optimizer=self.optimizer_adam, metrics=self.model_metrics, loss=self.loss_f)
 
 
@@ -217,12 +232,16 @@ class KerasModel:
         def _generate(batcher):
             while 1:
                 context_data, mention_representation_data, target_data, feature_data = batcher.next()
-
-                yield({
+                inputs = dict({
                         'input_1': context_data[:,:self.context_length,:], # TODO: external param
                         'input_2': context_data[:,self.context_length+1:,:],
                         'input_3': mention_representation_data
-                    }, {
+                    })
+
+                if self.feature:
+                    inputs['input_4'] = feature_data
+
+                yield(inputs, {
                         'output_1': target_data
                     })
 

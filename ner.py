@@ -34,7 +34,7 @@ test_batcher = Batcher(test_dataset["storage"], test_dataset["data"], test_datas
 print '--> Creating model'
 
 # TODO: external config as JS
-model_wrapper = KerasModel(encoder='averaging', batch_size=batch_size, context_length=context_length, compile_model=True)
+model_wrapper = KerasModel(encoder='averaging', feature=True, batch_size=batch_size, context_length=context_length)
 
 print '  --> Done'
 print '--> Training model'
