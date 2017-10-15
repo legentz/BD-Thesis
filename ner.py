@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*- 
 
 # Silence Tensorflow Info and Warning
 import os, sys, datetime
@@ -9,9 +9,7 @@ from loader import Loader
 from batcher import Batcher
 from hook import acc_hook, save_predictions
 
-# TODO: Check for device in use (pretty-printed)
-# from tensorflow.python.client import device_lib
-# print device_lib.list_local_devices()
+print '--> Loading datasets'
 
 # Load dicts and datasets
 dicts, train_dataset, dev_dataset, test_dataset = Loader({
@@ -21,9 +19,7 @@ dicts, train_dataset, dev_dataset, test_dataset = Loader({
     'test': "data/Wiki/test_figer.pkl"
 }).get_data()
 
-# print "train_dataset_size", train_dataset["data"].shape[0]
-# print "dev_dataset_size", dev_dataset["data"].shape[0]
-# print "test_dataset_size", test_dataset["data"].shape[0]
+print '  --> Done'
 
 context_length = 10
 batch_size = 1000
@@ -33,16 +29,20 @@ now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
 
 # TODO: clearify inputs when refactoring Batcher()
 train_batcher = Batcher(train_dataset["storage"], train_dataset["data"], batch_size, context_length, dicts["id2vec"])
-# dev_batcher = Batcher(dev_dataset["storage"],dev_dataset["data"],1000,10,dicts["id2vec"]) # dev_dataset["data"].shape[0]
-test_batcher = Batcher(test_dataset["storage"], test_dataset["data"], 1000, context_length, dicts["id2vec"])
+test_batcher = Batcher(test_dataset["storage"], test_dataset["data"], test_dataset['data'].shape[0], context_length, dicts["id2vec"])
 
-print 'Creating the model...'
+print '--> Creating model'
 
 # TODO: external config as JS
-model_wrapper = KerasModel(encoder='lstm', batch_size=batch_size, context_length=context_length, compile_model=True)
+model_wrapper = KerasModel(encoder='averaging', batch_size=batch_size, context_length=context_length, compile_model=True)
+
+print '  --> Done'
+print '--> Training model'
+
 results = model_wrapper.train_model(train_batcher, steps_per_epoch=2000, epochs=1, shuffle=True, verbose=1)
 
-print 'Model has been trained successfully'
+print '  --> Done'
+print '--> Saving model'
 
 # Saving model as HDF5 model
 model_wrapper.save_to_json({
@@ -50,7 +50,7 @@ model_wrapper.save_to_json({
     'weights_path': 'model_saved_weights' + now + '.h5'
     })
 
-print 'Model has been saved'
+print '  --> Done'
 
 # Coming soon...
 # model.load_from_json_and_compile()

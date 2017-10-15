@@ -1,26 +1,24 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*- 
 
 import numpy as np
 import sys
 import hook
 from keras.models import Model, model_from_json
-from keras.layers import Input, add, Masking, Activation
+from keras.layers import Input, add, Masking, Activation, TimeDistributed
 from keras.layers.recurrent import LSTM
-from keras.layers.core import Dropout, Flatten, Permute, RepeatVector, Permute, Dense, Lambda
+from keras.layers.wrappers import Bidirectional
+from keras.layers.core import Dropout, Flatten, Permute, RepeatVector, Permute, Dense, Lambda, Reshape
 from keras.layers.merge import Concatenate, Dot, concatenate, multiply
-from keras.backend import dropout, sigmoid, binary_crossentropy, variable, random_uniform_variable, constant, int_shape, dot, is_keras_tensor
+from keras.backend import dropout, sum, sigmoid, binary_crossentropy, variable, random_uniform_variable, constant, int_shape, dot, is_keras_tensor
 from keras.optimizers import Adam
 from keras.initializers import Constant
+from custom_layers.attentions import Attention
+from custom_layers.averaging import Averaging
 
-def new_tensor_(name, shape, pad=True):
+def new_tensor_(name, shape):
     initial = np.random.uniform(-0.01, 0.01, size=shape)
+    initial[0] = np.zeros(shape[1])
 
-    if pad == True:
-        initial[0] = np.zeros(shape[1])
-
-    # TODO: insert Constant someway...
-    # initial = variable(initial, name=name, dtype='float32')
-    # initial = tf.constant_initializer(initial)
     return constant(initial, shape=shape, name=name)
 
 def lambda_(x, r_dim, t_dim):
@@ -87,9 +85,7 @@ class KerasModel:
         self.attention_dim = 100
         self.feature_dim = 50
         self.feature_input_dim = 70
-
-        # if encoder is not 'averanging'
-        self.representation_dim = self.lstm_dim * 2 + self.emb_dim
+        self.representation_dim = self.lstm_dim*2 + self.emb_dim if self.encoder != 'averaging' else self.emb_dim*3
 
         # if --feature
         # self.representation_dim += self.feature_dim
@@ -104,50 +100,56 @@ class KerasModel:
         else:
 
             # Use batch_shape(3D) when stateful=True
-            self.mention_representation = Input(batch_shape=(self.batch_size, self.emb_dim), name='input_3')
+            # self.mention_representation = Input(batch_shape=(self.batch_size, self.emb_dim), name='input_3')
+            # self.left_context = Input(batch_shape=(self.batch_size, self.context_length, self.emb_dim), name='input_1')
+            # self.right_context = Input(batch_shape=(self.batch_size, self.context_length, self.emb_dim), name='input_2')
+            # self.target = Input(batch_shape=(self.batch_size, self.target_dim))
 
-            self.left_context = Input(batch_shape=(self.batch_size, self.context_length, self.emb_dim), name='input_1')
-            self.right_context = Input(batch_shape=(self.batch_size, self.context_length, self.emb_dim), name='input_2')
-            self.target = Input(batch_shape=(self.batch_size, self.target_dim))
+            self.mention_representation = Input(shape=(self.emb_dim,), name='input_3')
+            self.left_context = Input(shape=(self.context_length, self.emb_dim,), name='input_1')
+            self.right_context = Input(shape=(self.context_length, self.emb_dim,), name='input_2')
+            self.target = Input(shape=(self.target_dim,))
+
+            # Context as list of Input tensors
             # self.context = [Input(batch_shape=(self.batch_size,self.emb_dim)) for i in range(self.context_length*2+1)]
             # self.left_context = self.context[:self.context_length]
             # self.right_context = self.context[self.context_length+1:]
 
-            print 'left_context: ', int_shape(self.left_context)
-            print 'right_context: ', int_shape(self.right_context)
-            print 'mention_representation: ', int_shape(self.mention_representation)
-
             # LSTM
             if self.encoder == 'lstm':
-                self.L_LSTM, l_1, l_2 = LSTM(self.lstm_dim, return_state=True, stateful=True, input_shape=int_shape(self.left_context))(self.left_context)
-                self.R_LSTM, r_1, r_2 = LSTM(self.lstm_dim, return_state=True, stateful=True, go_backwards=True)(self.right_context)
+                self.L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=0.5, input_shape=int_shape(self.left_context))(self.left_context)
+                self.R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=0.5, go_backwards=True)(self.right_context)
 
-                # self.context_representation = concatenate([L_state1, R_state1], axis=1)
+                # Stateful LSTM: need to use fixed batch size (batch_input_shape)
+                # self.L_LSTM, l_1, l_2 = LSTM(self.lstm_dim, return_state=True, stateful=True, input_shape=int_shape(self.left_context))(self.left_context)
+                # self.R_LSTM, r_1, r_2 = LSTM(self.lstm_dim, return_state=True, stateful=True, go_backwards=True)(self.right_context)
+
                 self.context_representation = concatenate([self.L_LSTM, self.R_LSTM], axis=1)
-                # self.L_LSTM = LSTM(self.lstm_dim, stateful=True, return_sequences=True, input_shape=int_shape(self.left_context[0]), initial_state=self.left_context) # (self.left_context)
-                # self.R_LSTM = LSTM(self.lstm_dim, stateful=True, return_sequences=True, go_backwards=True, initial_state=self.right_context)  # (self.right_context)
-                # self.L_RNN, _ = RNN(self.L_LSTM, self.left_context)(self.left_context)
-                # self.R_RNN, _ = RNN(self.R_LSTM, self.right_context)(self.right_context)
-                # self.context_representation = concatenate([L_LSTM, R_LSTM], axis=1)
+
+            # Averaging
+            if self.encoder == 'averaging':
+                self.context_representation = Averaging(concat_axis=1, sum_axis=1)([self.left_context, self.right_context])
 
             # LSTM + Attentions
             if self.encoder == 'attentive':
-                self.LF_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, input_shape=self.left_context.shape)(self.left_context)
-                self.LB_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, go_backwards=True)(self.left_context)
-                self.L_biLSTM = Concatenate([self.LF_oneLSTM, self.LB_oneLSTM])
-                self.RF_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True)(self.right_context)
-                self.RB_oneLSTM = LSTM(self.lstm_dim, return_sequences=True, stateful=True, go_backwards=True)(self.right_context)
-                self.R_biLSTM = Concatenate([self.RF_oneLSTM, self.RB_oneLSTM])
+                # self.LF_oneLSTM = LSTM(self.lstm_dim, input_shape=int_shape(self.left_context))(self.left_context)
+                # self.LB_oneLSTM = LSTM(self.lstm_dim, go_backwards=True)(self.left_context)
+                # self.L_biLSTM = Concatenate([self.LF_oneLSTM, self.LB_oneLSTM])
 
-                self.LR_biLSTM = Concatenate([self.L_biLSTM, self.R_biLSTM])
+                # self.RF_oneLSTM = LSTM(self.lstm_dim, input_shape=int_shape(self.right_context))(self.right_context)
+                # self.RB_oneLSTM = LSTM(self.lstm_dim, go_backwards=True)(self.right_context)
+                # self.R_biLSTM = Concatenate([self.RF_oneLSTM, self.RB_oneLSTM])
 
-                self.attention = Dense(self.attention_dim, activation='tanh', input_shape=(self.lstm_dim*2,))(self.LR_biLSTM)
-                self.attention = Flatten()(self.attention)
-                self.attention = Activation('softmax')(self.attention)
-                self.attention = RepeatVector(self.lstm_dim)(self.attention)
-                self.attention = Permute([2, 1])(self.attention)
+                self.L_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(self.left_context)))(self.left_context)
+                self.R_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(self.left_context)))(self.right_context)
 
-                self.context_representation = merge([self.activations, self.attention], mode='mul')
+                self.LR_biLSTM = add([self.L_biLSTM, self.R_biLSTM])
+
+                # Attentive encoder
+                attention_output = Attention()(self.LR_biLSTM)
+
+                # self.context_representation = dot(self.LR_biLSTM, xxx)
+                self.context_representation = attention_output
 
             # TODO: Missing --feature part...
             # ...
