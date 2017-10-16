@@ -39,10 +39,11 @@ def lambda_(x, r_dim, t_dim):
 class KerasModel:
     def __init__(self, **kwargs):
 
-        # **kwargs
-        self.load_model = kwargs['load_model'] if 'load_model' in kwargs else None
-        self.encoder = kwargs['encoder'] if 'encoder' in kwargs else None
-        self.feature = kwargs['feature'] if 'feature' in kwargs else None
+        # **kwargs options
+        self.load_model = kwargs['load_model'] if 'load_model' in kwargs else False
+        self.encoder = kwargs['encoder'] if 'encoder' in kwargs else 'averaging'
+        self.feature = kwargs['feature'] if 'feature' in kwargs else False
+        self.hier = kwargs['hier'] if 'hier' in kwargs else False
 
         # Hyperparams
         self.context_length = kwargs['context_length'] if 'context_length' in kwargs else 5
@@ -51,24 +52,40 @@ class KerasModel:
         self.target_dim = 113
         self.dropout_ = 0.5
         self.learning_rate = 0.001
-        self.feature_size = 600000
+
+        # TODO: hook.acc_hook
+        # Metrics and loss
+        self.model_metrics = ['accuracy', 'mae']
+        self.loss_f = 'binary_crossentropy'
+
+        # LSTM units
         self.lstm_dim = 100
+
+        # Attentive encoder units
         self.attention_dim = 100
+
+        # Feature
         self.feature_dim = 50
         self.feature_input_dim = 70
-        self.hier = True
-        self.representation_dim = self.lstm_dim*2 + self.emb_dim if self.encoder != 'averaging' else self.emb_dim*3
+        self.feature_size = 600000
+
+        # Hier
+        self.label2id_path = './resource/Wiki/label2id_figer.txt'
+
+        # Representation
+        if self.encoder != 'averaging':
+            self.representation_dim = self.lstm_dim*2 + self.emb_dim
+        else:
+            self.representation_dim = self.emb_dim*3
 
         if self.feature:
             self.representation_dim += self.feature_dim
 
-        # TODO: hook.acc_hook
-        self.model_metrics = ['accuracy', 'mae']
-        self.loss_f = 'binary_crossentropy'
-
-        if self.load_model is not None:
+        # Load module from .json/.h5...
+        if self.load_model:
             self.load_from_json_and_compile(self.load_model)
 
+        # ...or create a new one
         else:
 
             # Use batch_shape(3D) when stateful=True
@@ -133,7 +150,7 @@ class KerasModel:
             # Hier part
             self.distribution = Hier(
                 process_hier=self.hier,
-                label2id_path='./resource/Wiki/label2id_figer.txt',
+                label2id_path=self.label2id_path,
                 target_dim=self.target_dim,
                 V_emb_shape=(self.target_dim, self.representation_dim) if self.hier else (self.representation_dim, self.target_dim),
                 V_emb_name='hier',

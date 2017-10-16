@@ -1,44 +1,10 @@
 # -*- coding: utf-8 -*- 
 
-# Silence Tensorflow Info and Warning
-import os, sys, datetime
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
 from model import KerasModel
 from loader import Loader
 from batcher import Batcher
-from hook import acc_hook, save_predictions
-
-config = {
-    'data': {
-        'dicts': "data/Wiki/dicts_figer.pkl",
-        'train': "data/Wiki/train_figer.pkl",
-        'dev': "data/Wiki/dev_figer.pkl",
-        'test': "data/Wiki/test_figer.pkl",
-    },
-    'hyper': {
-        'batch_size': 1000,
-        'context_length': 10,
-        'feature': True,
-        'hier': True,
-        'encoder': 'averaging'
-    },
-    'train': {
-        'steps_per_epoch': 2000,
-        'epochs': 5,
-        'shuffle': True,
-        'verbose': 1
-    },
-    'predict': {
-        'batch_size': 1000,
-        'verbose': 1,
-        'save_as_txt': 'prediction'
-    },
-    'save_as': {
-        'name': 'model_saved',
-        'weights': 'model_saved_weights'
-    }
-}
+from config.config import config
+from hook import acc_hook, save_predictions 
 
 print '--> Loading datasets'
 
@@ -75,6 +41,7 @@ print '--> Creating model'
 model_wrapper = KerasModel(
     encoder=config['hyper']['encoder'],
     feature=config['hyper']['feature'],
+    hier=config['hyper']['hier']['process'],
     batch_size=config['hyper']['batch_size'],
     context_length=config['hyper']['context_length']
 )
