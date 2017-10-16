@@ -3,9 +3,12 @@
 from model import KerasModel
 from loader import Loader
 from batcher import Batcher
-from config.config import config
 from hook import acc_hook, save_predictions 
 import datetime
+from sys import exit
+
+# Config JSON
+from config.config import config
 
 # Load dicts and datasets
 dicts, train_dataset, dev_dataset, test_dataset = Loader(
@@ -29,7 +32,9 @@ test_batcher = Batcher(
     dicts["id2vec"]
 )
 
-model_wrapper = KerasModel(hyper=config['hyper'])
+model_wrapper = KerasModel(
+    hyper=config['hyper']
+)
 model_wrapper.compile_model()
 
 # Summary 
@@ -45,35 +50,25 @@ results = model_wrapper.train_model(
 )
 
 # Saving model as HDF5 model
-model_wrapper.save_to_json({
-    'json_path': config['save_as']['name'], 
-    'weights_path': config['save_as']['weights']
-    })
+model_wrapper.save_to_json(
+    json_path=config['save_as']['name'],
+    weights_path=config['save_as']['weights']
+)
 
 # Coming soon...
 # model.load_from_json_and_compile()
 
-# TODO: remove get_model() before prediction
-model = model_wrapper.get_model()
-
 # Prediction
 # Preparing batcher...
-context_data, mention_representation_data, target_data, feature_data = test_batcher.next()
-
-# TODO: move inside KerasModel
-test_to_predict = model.predict({
-                'input_1': context_data[:,:config['hyper']['context_length'],:],
-                'input_2': context_data[:,config['hyper']['context_length']+1:,:],
-                'input_3': mention_representation_data
-            }, batch_size=config['predict']['batch_size'], verbose=config['predict']['verbose'])
-
-# Used to produce different backup .h5/.json
-# TODO: Remove from here
-now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
-
-# Make it right...
-acc_hook(test_to_predict, target_data)
-save_predictions(test_to_predict, target_data, dicts['id2label'], config['predict']['save_as_txt'] + now + '.txt')
+results = model_wrapper.get_predictions(
+    test_batcher,
+    batch_size=config['predict']['batch_size'],
+    acc_hook=config['predict']['acc_hook'],
+    id2label=dicts['id2label'],
+    show_results_vector=config['predict']['show_results_vector'],
+    save_as_txt=config['predict']['save_as_txt'],
+    verbose=config['predict']['verbose'],
+)
 
 # TODO: Solve Lambda layer error during model loading
 # model_wrapper = KerasModel(load_model={

@@ -21,26 +21,28 @@ config = {
         'dropout': 0.5,
         'learning_rate': 0.001,
         'feature': {
-            'process': False,
+            'process': True,
             'dim': 50,
             'input_dim': 70,
             'size': 600000
         },
         'hier': {
-            'process': False,
+            'process': True,
             'label2id_path': './resource/Wiki/label2id_figer.txt'
         },
         'metrics': ['accuracy', 'mae'],
         'loss': 'binary_crossentropy'
     },
     'train': {
-        'steps_per_epoch': 2000,
-        'epochs': 5,
+        'steps_per_epoch': 2000, # 2000
+        'epochs': 5, # 5
         'shuffle': True,
         'verbose': 1
     },
     'predict': {
         'batch_size': 1000,
+        'acc_hook': True,
+        'show_results_vector': True,
         'verbose': 1,
         'save_as_txt': 'prediction'
     },

@@ -7,18 +7,14 @@ def get_true_and_prediction(scores, y_data):
         predicted_tag = []
         true_tag = []
         for label_id,label_score in enumerate(list(true_label)):
-            print label_id, label_score
             if label_score > 0:
                 true_tag.append(label_id)
         lid,ls = max(enumerate(list(score)),key=lambda x: x[1])
         predicted_tag.append(lid)
         for label_id,label_score in enumerate(list(score)):
-            print label_id, label_score
             if label_score > 0.5:
                 if label_id != lid:
                     predicted_tag.append(label_id)
-        print true_tag
-        print predicted_tag
         true_and_prediction.append((true_tag, predicted_tag))
     return true_and_prediction
 

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*- 
 
+from __future__ import print_function
 import hook
 import datetime
 from keras.models import Model, model_from_json
@@ -10,6 +11,7 @@ from keras.layers.core import Dropout
 from keras.layers.merge import concatenate
 from keras.backend import int_shape
 from keras.optimizers import Adam
+from keras.callbacks import LambdaCallback
 from custom_layers.attentions import Attention
 from custom_layers.averaging import Averaging
 from custom_layers.features import Feature
@@ -19,7 +21,7 @@ class KerasModel:
     def __init__(self, hyper=None, **kwargs):
         assert(hyper is not None)
 
-        print '--> Creating model'
+        print('--> Creating model')
 
         # **kwargs
         self.load_model = kwargs['load_model'] if 'load_model' in kwargs else False # TODO: put inside AIO config
@@ -164,23 +166,23 @@ class KerasModel:
         if self.model is not None:
             return self.model
 
-    def save_to_json(self, options=None):
-        assert(options['json_path'] is not None)
-        assert(options['weights_path'] is not None)
+    def save_to_json(self, json_path=None, weights_path=None):
+        assert(json_path is not None)
+        assert(weights_path is not None)
+        assert(self.model is not None)
 
-        print '--> Saving model'
+        print('--> Saving model')
 
-        if self.model is not None:
-            # Used to produce different backup .h5/.json
-            now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
+        # Used to produce different backup .h5/.json
+        now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
 
-            # Save
-            json = self.model.to_json()
-            json_path = options['json_path'] + now + '.json'
-            weights_path = options['weights_path'] + now + '.h5'
+        # Save
+        json = self.model.to_json()
+        json_path = json_path + now + '.json'
+        weights_path = weights_path + now + '.h5'
 
-            open(json_path, 'w').write(json)
-            self.model.save_weights(weights_path)
+        open(json_path, 'w').write(json)
+        self.model.save_weights(weights_path)
 
     def load_from_json_and_compile(self, options=None):
         assert(options is not None)
@@ -190,7 +192,7 @@ class KerasModel:
         assert(options['optimizer'] is not None)
         assert(options['weights_path'] is not None)
 
-        print '--> Loading model from JSON...'
+        print('--> Loading model from JSON...')
 
         self.model = model_from_json(open(options['json_path']).read())
         self.model.compile(loss=options['loss'], optimizer=options['optimizer'], metrics=options['metrics'])
@@ -200,9 +202,17 @@ class KerasModel:
 
     # steps_per_epoch = tot.samples / batch size
     def train_model(self, batcher, steps_per_epoch=1, epochs=1, shuffle=False, verbose=0):
+        assert(self.model is not None)
         assert(batcher is not None)
 
-        print '--> Training model'
+        print('--> Training model')
+
+        on_begin_callback = LambdaCallback(
+            on_train_begin=lambda logs: print('Started at ', datetime.datetime.now().strftime('%d-%m-%Y_%H:%M'))
+        )
+        on_end_callback = LambdaCallback(
+            on_train_end=lambda logs: print('Ended at ', datetime.datetime.now().strftime('%d-%m-%Y_%H:%M'))
+        )
 
         def _generate(batcher):
             while 1:
@@ -221,4 +231,37 @@ class KerasModel:
                     })
 
         if self.model is not None:
-            return self.model.fit_generator(_generate(batcher), steps_per_epoch, epochs=epochs, shuffle=shuffle, verbose=verbose) # steps_per_epoch=2000
+            return self.model.fit_generator(_generate(batcher), steps_per_epoch, callbacks=[on_begin_callback, on_end_callback], epochs=epochs, shuffle=shuffle, verbose=verbose)
+
+    def get_predictions(self, batcher, batch_size=1, acc_hook=False, id2label=None, show_results_vector=False, save_as_txt=None, verbose=0):
+        assert(self.model is not None)
+        assert(batcher is not None)
+
+        print('--> Getting predictions')
+
+        context_data, mention_representation_data, target_data, feature_data = batcher.next()
+        results = self.model.predict({
+                'input_1': context_data[:,:self.context_length,:],
+                'input_2': context_data[:,self.context_length+1:,:],
+                'input_3': mention_representation_data
+            }, batch_size=batch_size, verbose=verbose)
+
+        if show_results_vector:
+            print(results)
+
+        if acc_hook:
+            # Make it right...
+            print(results)
+            print(target_data)
+            print(type(results), type(target_data))
+
+            hook.acc_hook(results, target_data)
+       
+            if save_as_txt is not None:
+                if isinstance(save_as_txt, bool):
+                    save_as_txt = 'NO_NAME'
+
+                now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
+                hook.save_predictions(results, target_data, id2label, save_as_txt + now + '.txt')
+
+
