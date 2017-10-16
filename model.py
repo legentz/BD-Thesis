@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*- 
 
 import hook
+import datetime
 from keras.models import Model, model_from_json
 from keras.layers import Input, add
 from keras.layers.recurrent import LSTM
@@ -173,6 +174,10 @@ class KerasModel:
         print '--> Saving model'
 
         if self.model is not None:
+            # Used to produce different backup .h5/.json
+            now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
+
+            # Save
             json = self.model.to_json()
             json_path = options['json_path'] + now + '.json'
             weights_path = options['weights_path'] + now + '.h5'

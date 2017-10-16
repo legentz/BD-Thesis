@@ -12,9 +12,6 @@ dicts, train_dataset, dev_dataset, test_dataset = Loader(
     config['data']
 ).get_data()
 
-# Used to produce different backup .h5/.json
-now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
-
 # TODO: clearify inputs when refactoring Batcher()
 train_batcher = Batcher(
     train_dataset["storage"],
@@ -75,6 +72,10 @@ test_to_predict = model.predict({
                 'input_2': context_data[:,config['hyper']['context_length']+1:,:],
                 'input_3': mention_representation_data
             }, batch_size=config['predict']['batch_size'], verbose=config['predict']['verbose'])
+
+# Used to produce different backup .h5/.json
+# TODO: Remove from here
+now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
 
 # Make it right...
 acc_hook(test_to_predict, target_data)
