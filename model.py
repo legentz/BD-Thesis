@@ -16,42 +16,44 @@ from custom_layers.features import Feature
 from custom_layers.hiers import Hier
 
 class KerasModel:
-    def __init__(self, **kwargs):
+    def __init__(self, hyper=None, **kwargs):
+        assert(hyper is not None)
 
         print '--> Creating model'
 
-        # Main options
-        self.load_model = kwargs['load_model'] if 'load_model' in kwargs else False
-        self.encoder = kwargs['encoder'] if 'encoder' in kwargs else 'averaging'
-        self.feature = kwargs['feature'] if 'feature' in kwargs else False
-        self.hier = kwargs['hier'] if 'hier' in kwargs else False
+        # **kwargs
+        self.load_model = kwargs['load_model'] if 'load_model' in kwargs else False # TODO: put inside AIO config
 
         # Hyperparams
-        self.context_length = kwargs['context_length'] if 'context_length' in kwargs else 5
-        self.batch_size = kwargs['batch_size'] if 'batch_size' in kwargs else 32
-        self.emb_dim = 300
-        self.target_dim = 113
-        self.dropout_ = 0.5
-        self.learning_rate = 0.001
+        self.encoder = hyper['encoder']
+        self.context_length = hyper['context_length']
+        self.batch_size = hyper['batch_size']
+        self.dropout = hyper['dropout']
+        self.learning_rate = hyper['learning_rate']
+        self.emb_dim = hyper['emb_dim']
+        self.target_dim = hyper['target_dim']
+
+        # LSTM units
+        self.lstm_dim = hyper['lstm_dim']
+
+        # Attentive encoder units
+        self.attention_dim = hyper['attention_dim']
+
+        # Feature
+        self.feature = hyper['feature']['process']
+        self.feature_dim = hyper['feature']['dim']
+        self.feature_input_dim = hyper['feature']['input_dim']
+        self.feature_size = hyper['feature']['size']
+
+        # Hier
+        self.hier = hyper['hier']['process']
+        self.label2id_path = hyper['hier']['label2id_path']
 
         # TODO: hook.acc_hook
         # Metrics and loss
-        self.model_metrics = ['accuracy', 'mae']
-        self.loss_f = 'binary_crossentropy'
-
-        # LSTM units
-        self.lstm_dim = 100
-
-        # Attentive encoder units
-        self.attention_dim = 100
-
-        # Feature
-        self.feature_dim = 50
-        self.feature_input_dim = 70
-        self.feature_size = 600000
-
-        # Hier
-        self.label2id_path = './resource/Wiki/label2id_figer.txt'
+        self.metrics = hyper['metrics']
+        self.loss = hyper['loss']
+        self.optimizer_adam = Adam(lr=self.learning_rate)
 
         # Representation
         if self.encoder != 'averaging':
@@ -62,37 +64,28 @@ class KerasModel:
         if self.feature:
             self.representation_dim += self.feature_dim
 
+
+        # TODO: to be continued
         # Load module from .json/.h5...
         if self.load_model:
+            # TODO: Fix load_model options
             self.load_from_json_and_compile(self.load_model)
 
         # ...or create a new one
         else:
-
-            # Use batch_shape(3D) when stateful=True
-            # self.mention_representation = Input(batch_shape=(self.batch_size, self.emb_dim), name='input_3')
-            # self.left_context = Input(batch_shape=(self.batch_size, self.context_length, self.emb_dim), name='input_1')
-            # self.right_context = Input(batch_shape=(self.batch_size, self.context_length, self.emb_dim), name='input_2')
-            # self.target = Input(batch_shape=(self.batch_size, self.target_dim))
-
             self.mention_representation = Input(shape=(self.emb_dim,), name='input_3')
             self.left_context = Input(shape=(self.context_length, self.emb_dim,), name='input_1')
             self.right_context = Input(shape=(self.context_length, self.emb_dim,), name='input_2')
             self.target = Input(shape=(self.target_dim,))
 
             # Dropout over mention_representation
-            self.mention_representation_dropout = Dropout(self.dropout_)(self.mention_representation)
-
-            # Context as list of Input tensors
-            # self.context = [Input(batch_shape=(self.batch_size,self.emb_dim)) for i in range(self.context_length*2+1)]
-            # self.left_context = self.context[:self.context_length]
-            # self.right_context = self.context[self.context_length+1:]
+            self.mention_representation_dropout = Dropout(self.dropout)(self.mention_representation)
 
             # LSTM
             if self.encoder == 'lstm':
-                self.L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout_, input_shape=int_shape(self.left_context))
+                self.L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, input_shape=int_shape(self.left_context))
                 self.L_LSTM = self.L_LSTM(self.left_context)
-                self.R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout_, go_backwards=True)
+                self.R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, go_backwards=True)
                 self.R_LSTM = self.R_LSTM(self.right_context)
 
                 self.context_representation = concatenate([self.L_LSTM, self.R_LSTM], axis=1)
@@ -117,7 +110,7 @@ class KerasModel:
             # Logistic Regression
             if self.feature:
                 self.feature_input = Input(shape=(self.feature_input_dim,), dtype='int32', name='input_4')
-                self.feature_representation = Feature(F_emb_shape=(self.feature_size, self.feature_dim), F_emb_name='feat_emb', reduce_sum_axis=1, dropout=self.dropout_)
+                self.feature_representation = Feature(F_emb_shape=(self.feature_size, self.feature_dim), F_emb_name='feat_emb', reduce_sum_axis=1, dropout=self.dropout)
                 self.feature_representation = self.feature_representation(self.feature_input)
                 
                 self.representation = concatenate([self.mention_representation_dropout, self.context_representation, self.feature_representation], axis=1) # is_keras_tensor=True
@@ -142,12 +135,6 @@ class KerasModel:
             )
             self.distribution = self.distribution(self.representation)
 
-            # TODO: Testing... -> Not working as expected
-            # self.loss_f = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logit, labels=self.target))
-
-            # Used during model compilation
-            self.optimizer_adam = Adam(lr=self.learning_rate)
-
             # Prepare inputs list
             if self.feature:
                 inputs = [self.left_context, self.right_context, self.mention_representation, self.feature_input]
@@ -156,7 +143,7 @@ class KerasModel:
 
             # Creation and compilation
             self.model = Model(inputs=inputs, outputs=self.distribution)       
-            self.model.compile(optimizer=self.optimizer_adam, metrics=self.model_metrics, loss=self.loss_f)
+            self.model.compile(optimizer=self.optimizer_adam, metrics=self.metrics, loss=self.loss)
 
 
     def get_model_summary(self):

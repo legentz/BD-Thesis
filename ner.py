@@ -31,11 +31,7 @@ test_batcher = Batcher(
 
 # TODO: external config as JS
 model_wrapper = KerasModel(
-    encoder=config['hyper']['encoder'],
-    feature=config['hyper']['feature'],
-    hier=config['hyper']['hier']['process'],
-    batch_size=config['hyper']['batch_size'],
-    context_length=config['hyper']['context_length']
+    hyper=config['hyper']
 )
 
 # Summary 

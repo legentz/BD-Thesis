@@ -13,12 +13,25 @@ config = {
     'hyper': {
         'batch_size': 1000,
         'context_length': 10,
-        'feature': False,
+        'encoder': 'attentive',
+        'lstm_dim': 100,
+        'attention_dim': 100,
+        'emb_dim': 300,
+        'target_dim': 113,
+        'dropout': 0.5,
+        'learning_rate': 0.001,
+        'feature': {
+            'process': False,
+            'dim': 50,
+            'input_dim': 70,
+            'size': 600000
+        },
         'hier': {
             'process': False,
             'label2id_path': './resource/Wiki/label2id_figer.txt'
         },
-        'encoder': 'attentive'
+        'metrics': ['accuracy', 'mae'],
+        'loss': 'binary_crossentropy'
     },
     'train': {
         'steps_per_epoch': 2000,
