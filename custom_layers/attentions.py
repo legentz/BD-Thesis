@@ -11,7 +11,6 @@ def dot_(x, kernel):
 
 class Attention(Layer):
     def __init__(self, **kwargs):
-
         super(Attention, self).__init__(**kwargs)
 
     def build(self, input_shape):

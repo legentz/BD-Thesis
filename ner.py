@@ -20,7 +20,7 @@ config = {
         'batch_size': 1000,
         'context_length': 10,
         'feature': True,
-        'hier': False,
+        'hier': True,
         'encoder': 'averaging'
     },
     'train': {

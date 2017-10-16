@@ -3,18 +3,20 @@
 import numpy as np
 import sys
 import hook
+import tensorflow as tf
 from keras.models import Model, model_from_json
 from keras.layers import Input, add, Masking, Activation, TimeDistributed
 from keras.layers.recurrent import LSTM
 from keras.layers.wrappers import Bidirectional
 from keras.layers.core import Dropout, Flatten, Permute, RepeatVector, Permute, Dense, Lambda, Reshape
-from keras.layers.merge import Concatenate, Dot, concatenate, multiply
+from keras.layers.merge import Dot, concatenate, multiply
 from keras.backend import dropout, sum, sigmoid, binary_crossentropy, variable, random_uniform_variable, constant, int_shape, dot, is_keras_tensor
 from keras.optimizers import Adam
 from keras.initializers import Constant
 from custom_layers.attentions import Attention
 from custom_layers.averaging import Averaging
 from custom_layers.features import Feature
+from custom_layers.hiers import Hier
 
 def new_tensor_(name, shape):
     initial = np.random.uniform(-0.01, 0.01, size=shape)
@@ -54,6 +56,7 @@ class KerasModel:
         self.attention_dim = 100
         self.feature_dim = 50
         self.feature_input_dim = 70
+        self.hier = True
         self.representation_dim = self.lstm_dim*2 + self.emb_dim if self.encoder != 'averaging' else self.emb_dim*3
 
         if self.feature:
@@ -127,16 +130,27 @@ class KerasModel:
             else:
                 self.representation = concatenate([self.mention_representation_dropout, self.context_representation], axis=1) # is_keras_tensor=True
 
-            # TODO: Missing --hier part...
-            # ...
-            # self.W = new_tensor_('hier_W', (self.representation_dim, self.target_dim))
+            # Hier part
+            self.distribution = Hier(
+                process_hier=self.hier,
+                label2id_path='./resource/Wiki/label2id_figer.txt',
+                target_dim=self.target_dim,
+                V_emb_shape=(self.target_dim, self.representation_dim) if self.hier else (self.representation_dim, self.target_dim),
+                V_emb_name='hier',
+                return_logit=False,
+                name='output_1'
+            )
+            self.distribution = self.distribution(self.representation)
+
+            # TODO: Testing... -> Not working as expected
+            # self.loss_f = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logit, labels=self.target))
 
             # Used during prediction phase
             # TODO: try to use Dot() layer instead of Lambda
             # DON'T use Activation() layer!
-            self.distribution_ = Lambda(lambda_, name='output_1')
-            self.distribution_.arguments = {'r_dim': self.representation_dim, 't_dim': self.target_dim}
-            self.distribution = self.distribution_(self.representation) # dot and sigmoid
+            # self.distribution_ = Lambda(lambda_, name='output_1')
+            # self.distribution_.arguments = {'r_dim': self.representation_dim, 't_dim': self.target_dim}
+            # self.distribution = self.distribution_(self.representation) # dot and sigmoid
 
             # Used during model compilation
             self.optimizer_adam = Adam(lr=self.learning_rate)
