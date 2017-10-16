@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*- 
 
+import datetime
 from model import KerasModel
 from loader import Loader
 from batcher import Batcher
 from hook import acc_hook, save_predictions 
-import datetime
 from sys import exit
+from utils import keras_logo
 
 # Config JSON
 from config.config import config
+
+# Cool feature
+keras_logo()
 
 # Load dicts and datasets
 dicts, train_dataset, dev_dataset, test_dataset = Loader(

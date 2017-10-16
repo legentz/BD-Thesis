@@ -3,6 +3,7 @@
 from numpy.random import uniform
 from numpy import zeros, array
 from tensorflow import constant_initializer
+from os import popen
 
 def random_uniform_custom(shape, min_, max_):
     i = uniform(min_, max_, size=shape)
@@ -38,5 +39,39 @@ def create_prior(label2id_file):
                     code.append(0)
             prior[int(id),:] = array(code)
     return prior
+
+# Cool!
+def keras_logo():
+    keras_logo = '''
+::::::::::::::::::::::::::::::::::::::::
+::::/oooo+/::::::::::::::::/oooooo/:::::
+:::/NMMMMMh::::::::::::::/yNMMMMMMd/::::
+:::+MMMMMMd::::::::::::/yNMMMMMMMd+:::::
+:::+MMMMMMd:::::::::/+yNMMMMMMNh+:::::::
+:::+MMMMMMd:::::::/+hNMMMMMMNh+:::::::::
+:::+MMMMMMd:::::/+hNMMMMMMNy+:::::::::::
+:::+MMMMMMd:::/+hMMMMMMMNy/:::::::::::::
+:::+MMMMMMd:/odMMMMMMMmy/:::::::::::::::
+:::+MMMMMMdodMMMMMMMMy/:::::::::::::::::
+:::+MMMMMMMMMMMMMMMMMmo:::::::::::::::::
+:::+MMMMMMMMMMMMMMMMMMNy/:::::::::::::::
+:::+MMMMMMMMMMdosNMMMMMMd+::::::::::::::
+:::+MMMMMMMMdo/::+mMMMMMMNs/::::::::::::
+:::+MMMMMMm+/:::::/yMMMMMMMd+:::::::::::
+:::+MMMMMMd::::::::/oNMMMMMMNs::::::::::
+:::+MMMMMMd::::::::::/dMMMMMMMh/::::::::
+:::+MMMMMMd:::::::::::/sNMMMMMMmo:::::::
+:::+MMMMMMd:::::::::::::+mMMMMMMMh/:::::
+:::+MMMMMMd::::::::::::::/yMMMMMMMm+::::
+:::+NMMMMMh:::::::::::::::/oNMMMMMMm/:::
+::::/sssso/:::::::::::::::::/ssssss/::::
+::::::::::::::::::::::::::::::::::::::::
+'''
+    rows, columns = popen('stty size', 'r').read().split()
+    pattern = str("{: ^" + columns + "s}")
+
+    for line in keras_logo.splitlines():
+        print pattern.format(line)
+
 
 
