@@ -8,3 +8,4 @@ tfenv
 *.h5
 *.json
 *.txt
+config/config.py
