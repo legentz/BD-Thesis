@@ -9,7 +9,7 @@ import datetime
 
 # Load dicts and datasets
 dicts, train_dataset, dev_dataset, test_dataset = Loader(
-    config['data']
+    paths=config['data']
 ).get_data()
 
 # TODO: clearify inputs when refactoring Batcher()

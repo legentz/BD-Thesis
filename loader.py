@@ -2,7 +2,9 @@
 from sklearn.externals import joblib
 
 class Loader:
-    def __init__(self, paths):
+    def __init__(self, paths=None):
+        assert(paths is not None)
+        
         self.paths = paths
 
     def get_data(self):
