@@ -6,6 +6,8 @@ class Loader:
         self.paths = paths
 
     def get_data(self):
+    	print '--> Loading datasets'
+    	
         dicts = joblib.load(self.paths['dicts'])
         train = joblib.load(self.paths['train'])
         dev = joblib.load(self.paths['dev'])

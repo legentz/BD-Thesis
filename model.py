@@ -1,45 +1,25 @@
 # -*- coding: utf-8 -*- 
 
-import numpy as np
-import sys
 import hook
-import tensorflow as tf
 from keras.models import Model, model_from_json
-from keras.layers import Input, add, Masking, Activation, TimeDistributed
+from keras.layers import Input, add
 from keras.layers.recurrent import LSTM
 from keras.layers.wrappers import Bidirectional
-from keras.layers.core import Dropout, Flatten, Permute, RepeatVector, Permute, Dense, Lambda, Reshape
-from keras.layers.merge import Dot, concatenate, multiply
-from keras.backend import dropout, sum, sigmoid, binary_crossentropy, variable, random_uniform_variable, constant, int_shape, dot, is_keras_tensor
+from keras.layers.core import Dropout
+from keras.layers.merge import concatenate
+from keras.backend import int_shape
 from keras.optimizers import Adam
-from keras.initializers import Constant
 from custom_layers.attentions import Attention
 from custom_layers.averaging import Averaging
 from custom_layers.features import Feature
 from custom_layers.hiers import Hier
 
-def new_tensor_(name, shape):
-    initial = np.random.uniform(-0.01, 0.01, size=shape)
-    initial[0] = np.zeros(shape[1])
-
-    return constant(initial, shape=shape, name=name)
-
-def lambda_(x, r_dim, t_dim):
-    W = new_tensor_('hier_W', (r_dim, t_dim))
-    
-    # Logit
-    # is a function that maps probabilities ([0,1]) to R ([-inf, +inf])
-    # L = ln((p/1-p)); p = 1/(1+e^-L)
-    # Probability 0.5 correspond to a logit of 0. Negative logit correspond
-    # to probabilities less than 0.5, positive > 0.5
-    dot_ = dot(x, W)
-    
-    return sigmoid(dot_)
-
 class KerasModel:
     def __init__(self, **kwargs):
 
-        # **kwargs options
+        print '--> Creating model'
+
+        # Main options
         self.load_model = kwargs['load_model'] if 'load_model' in kwargs else False
         self.encoder = kwargs['encoder'] if 'encoder' in kwargs else 'averaging'
         self.feature = kwargs['feature'] if 'feature' in kwargs else False
@@ -109,9 +89,9 @@ class KerasModel:
 
             # LSTM
             if self.encoder == 'lstm':
-                self.L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=0.5, input_shape=int_shape(self.left_context))
+                self.L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout_, input_shape=int_shape(self.left_context))
                 self.L_LSTM = self.L_LSTM(self.left_context)
-                self.R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=0.5, go_backwards=True)
+                self.R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout_, go_backwards=True)
                 self.R_LSTM = self.R_LSTM(self.right_context)
 
                 self.context_representation = concatenate([self.L_LSTM, self.R_LSTM], axis=1)
@@ -131,10 +111,7 @@ class KerasModel:
                 self.LR_biLSTM = add([self.L_biLSTM, self.R_biLSTM])
 
                 # Attentive encoder
-                attention_output = Attention()(self.LR_biLSTM)
-
-                # self.context_representation = dot(self.LR_biLSTM, xxx)
-                self.context_representation = attention_output
+                self.context_representation = Attention()(self.LR_biLSTM)
 
             # Logistic Regression
             if self.feature:
@@ -148,11 +125,16 @@ class KerasModel:
                 self.representation = concatenate([self.mention_representation_dropout, self.context_representation], axis=1) # is_keras_tensor=True
 
             # Hier part
+            if self.hier:
+                V_emb_shape = (self.target_dim, self.representation_dim) 
+            else:
+                V_emb_shape = (self.representation_dim, self.target_dim)
+
             self.distribution = Hier(
                 process_hier=self.hier,
                 label2id_path=self.label2id_path,
                 target_dim=self.target_dim,
-                V_emb_shape=(self.target_dim, self.representation_dim) if self.hier else (self.representation_dim, self.target_dim),
+                V_emb_shape=V_emb_shape,
                 V_emb_name='hier',
                 return_logit=False,
                 name='output_1'
@@ -161,13 +143,6 @@ class KerasModel:
 
             # TODO: Testing... -> Not working as expected
             # self.loss_f = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logit, labels=self.target))
-
-            # Used during prediction phase
-            # TODO: try to use Dot() layer instead of Lambda
-            # DON'T use Activation() layer!
-            # self.distribution_ = Lambda(lambda_, name='output_1')
-            # self.distribution_.arguments = {'r_dim': self.representation_dim, 't_dim': self.target_dim}
-            # self.distribution = self.distribution_(self.representation) # dot and sigmoid
 
             # Used during model compilation
             self.optimizer_adam = Adam(lr=self.learning_rate)
@@ -195,12 +170,15 @@ class KerasModel:
         assert(options['json_path'] is not None)
         assert(options['weights_path'] is not None)
 
+        print '--> Saving model'
+
         if self.model is not None:
             json = self.model.to_json()
-            
-            open(options['json_path'], 'w').write(json)
+            json_path = options['json_path'] + now + '.json'
+            weights_path = options['weights_path'] + now + '.h5'
 
-            self.model.save_weights(options['weights_path'])
+            open(json_path, 'w').write(json)
+            self.model.save_weights(weights_path)
 
     def load_from_json_and_compile(self, options=None):
         assert(options is not None)
@@ -210,7 +188,7 @@ class KerasModel:
         assert(options['optimizer'] is not None)
         assert(options['weights_path'] is not None)
 
-        print 'Loading model from JSON...'
+        print '--> Loading model from JSON...'
 
         self.model = model_from_json(open(options['json_path']).read())
         self.model.compile(loss=options['loss'], optimizer=options['optimizer'], metrics=options['metrics'])
@@ -222,11 +200,13 @@ class KerasModel:
     def train_model(self, batcher, steps_per_epoch=1, epochs=1, shuffle=False, verbose=0):
         assert(batcher is not None)
 
+        print '--> Training model'
+
         def _generate(batcher):
             while 1:
                 context_data, mention_representation_data, target_data, feature_data = batcher.next()
                 inputs = dict({
-                        'input_1': context_data[:,:self.context_length,:], # TODO: external param
+                        'input_1': context_data[:,:self.context_length,:],
                         'input_2': context_data[:,self.context_length+1:,:],
                         'input_3': mention_representation_data
                     })

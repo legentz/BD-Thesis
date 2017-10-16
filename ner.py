@@ -5,15 +5,12 @@ from loader import Loader
 from batcher import Batcher
 from config.config import config
 from hook import acc_hook, save_predictions 
-
-print '--> Loading datasets'
+import datetime
 
 # Load dicts and datasets
 dicts, train_dataset, dev_dataset, test_dataset = Loader(
     config['data']
 ).get_data()
-
-print '  --> Done'
 
 # Used to produce different backup .h5/.json
 now = datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')
@@ -35,8 +32,6 @@ test_batcher = Batcher(
     dicts["id2vec"]
 )
 
-print '--> Creating model'
-
 # TODO: external config as JS
 model_wrapper = KerasModel(
     encoder=config['hyper']['encoder'],
@@ -46,8 +41,9 @@ model_wrapper = KerasModel(
     context_length=config['hyper']['context_length']
 )
 
-print '  --> Done'
-print '--> Training model'
+# Summary 
+# TODO: apply improved names to the layers
+print model_wrapper.get_model_summary()
 
 results = model_wrapper.train_model(
     train_batcher,
@@ -57,16 +53,11 @@ results = model_wrapper.train_model(
     verbose=config['train']['verbose']
 )
 
-print '  --> Done'
-print '--> Saving model'
-
 # Saving model as HDF5 model
 model_wrapper.save_to_json({
-    'json_path': config['save_as']['name'] + now + '.json', # TODO: formats, now have to be hidden 
-    'weights_path': config['save_as']['weights'] + now + '.h5' # TODO: formats, now have to be hidden 
+    'json_path': config['save_as']['name'], 
+    'weights_path': config['save_as']['weights']
     })
-
-print '  --> Done'
 
 # Coming soon...
 # model.load_from_json_and_compile()

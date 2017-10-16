@@ -13,12 +13,12 @@ config = {
     'hyper': {
         'batch_size': 1000,
         'context_length': 10,
-        'feature': True,
+        'feature': False,
         'hier': {
-            'process': True,
+            'process': False,
             'label2id_path': './resource/Wiki/label2id_figer.txt'
         },
-        'encoder': 'averaging'
+        'encoder': 'attentive'
     },
     'train': {
         'steps_per_epoch': 2000,
