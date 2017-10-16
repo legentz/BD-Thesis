@@ -2,6 +2,10 @@
 import os, sys, datetime
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
+# Cool feature!
+from utils import keras_logo
+keras_logo()
+
 # AIO configuration
 config = {
     'data': {
