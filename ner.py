@@ -29,10 +29,8 @@ test_batcher = Batcher(
     dicts["id2vec"]
 )
 
-# TODO: external config as JS
-model_wrapper = KerasModel(
-    hyper=config['hyper']
-)
+model_wrapper = KerasModel(hyper=config['hyper'])
+model_wrapper.compile_model()
 
 # Summary 
 # TODO: apply improved names to the layers

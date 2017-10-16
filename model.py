@@ -65,85 +65,95 @@ class KerasModel:
             self.representation_dim += self.feature_dim
 
 
-        # TODO: to be continued
-        # Load module from .json/.h5...
-        if self.load_model:
-            # TODO: Fix load_model options
-            self.load_from_json_and_compile(self.load_model)
+        # # TODO: to be continued
+        # # Load module from .json/.h5...
+        # if self.load_model:
+        #     # TODO: Fix load_model options
+        #     self.load_from_json_and_compile(self.load_model)
 
-        # ...or create a new one
-        else:
-            self.mention_representation = Input(shape=(self.emb_dim,), name='input_3')
-            self.left_context = Input(shape=(self.context_length, self.emb_dim,), name='input_1')
-            self.right_context = Input(shape=(self.context_length, self.emb_dim,), name='input_2')
-            self.target = Input(shape=(self.target_dim,))
+        # # ...or create a new one
+        # else:
+    def compile_model(self):
 
-            # Dropout over mention_representation
-            self.mention_representation_dropout = Dropout(self.dropout)(self.mention_representation)
+        # Input tensors
+        mention_representation = Input(shape=(self.emb_dim,), name='input_3')
+        left_context = Input(shape=(self.context_length, self.emb_dim,), name='input_1')
+        right_context = Input(shape=(self.context_length, self.emb_dim,), name='input_2')
+        target = Input(shape=(self.target_dim,))
 
-            # LSTM
-            if self.encoder == 'lstm':
-                self.L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, input_shape=int_shape(self.left_context))
-                self.L_LSTM = self.L_LSTM(self.left_context)
-                self.R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, go_backwards=True)
-                self.R_LSTM = self.R_LSTM(self.right_context)
+        # Dropout over mention_representation
+        mention_representation_dropout = Dropout(self.dropout)(mention_representation)
 
-                self.context_representation = concatenate([self.L_LSTM, self.R_LSTM], axis=1)
+        # LSTM
+        if self.encoder == 'lstm':
+            L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, input_shape=int_shape(left_context))
+            L_LSTM = L_LSTM(left_context)
+            R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, go_backwards=True)
+            R_LSTM = R_LSTM(right_context)
 
-            # Averaging
-            if self.encoder == 'averaging':
-                self.context_representation = Averaging(concat_axis=1, sum_axis=1)
-                self.context_representation = self.context_representation([self.left_context, self.right_context])
+            context_representation = concatenate([L_LSTM, R_LSTM], axis=1)
 
-            # LSTM + Attentions
-            if self.encoder == 'attentive':
-                self.L_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(self.left_context)))
-                self.L_biLSTM = self.L_biLSTM(self.left_context)
-                self.R_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(self.left_context)))
-                self.R_biLSTM = self.R_biLSTM(self.right_context)
+        # Averaging
+        if self.encoder == 'averaging':
+            context_representation = Averaging(concat_axis=1, sum_axis=1)
+            context_representation = context_representation([left_context, right_context])
 
-                self.LR_biLSTM = add([self.L_biLSTM, self.R_biLSTM])
+        # LSTM + Attentions
+        if self.encoder == 'attentive':
+            L_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(left_context)))
+            L_biLSTM = L_biLSTM(left_context)
+            R_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(left_context)))
+            R_biLSTM = R_biLSTM(right_context)
 
-                # Attentive encoder
-                self.context_representation = Attention()(self.LR_biLSTM)
+            LR_biLSTM = add([L_biLSTM, R_biLSTM])
 
-            # Logistic Regression
-            if self.feature:
-                self.feature_input = Input(shape=(self.feature_input_dim,), dtype='int32', name='input_4')
-                self.feature_representation = Feature(F_emb_shape=(self.feature_size, self.feature_dim), F_emb_name='feat_emb', reduce_sum_axis=1, dropout=self.dropout)
-                self.feature_representation = self.feature_representation(self.feature_input)
-                
-                self.representation = concatenate([self.mention_representation_dropout, self.context_representation, self.feature_representation], axis=1) # is_keras_tensor=True
-           
-            else:
-                self.representation = concatenate([self.mention_representation_dropout, self.context_representation], axis=1) # is_keras_tensor=True
+            # Attentive encoder
+            context_representation = Attention()(LR_biLSTM)
 
-            # Hier part
-            if self.hier:
-                V_emb_shape = (self.target_dim, self.representation_dim) 
-            else:
-                V_emb_shape = (self.representation_dim, self.target_dim)
-
-            self.distribution = Hier(
-                process_hier=self.hier,
-                label2id_path=self.label2id_path,
-                target_dim=self.target_dim,
-                V_emb_shape=V_emb_shape,
-                V_emb_name='hier',
-                return_logit=False,
-                name='output_1'
+        # Logistic Regression
+        if self.feature:
+            feature_input = Input(shape=(self.feature_input_dim,), dtype='int32', name='input_4')
+            feature_representation = Feature(
+                F_emb_shape=(self.feature_size, self.feature_dim),
+                F_emb_name='feat_emb',
+                reduce_sum_axis=1,
+                dropout=self.dropout
             )
-            self.distribution = self.distribution(self.representation)
+            feature_representation = feature_representation(feature_input)
+            
+            representation = concatenate([mention_representation_dropout, context_representation, feature_representation], axis=1) # is_keras_tensor=True
+       
+        else:
+            representation = concatenate([mention_representation_dropout, context_representation], axis=1) # is_keras_tensor=True
 
-            # Prepare inputs list
-            if self.feature:
-                inputs = [self.left_context, self.right_context, self.mention_representation, self.feature_input]
-            else:
-                inputs = [self.left_context, self.right_context, self.mention_representation]
+        # Hier part
+        if self.hier:
+            V_emb_shape = (self.target_dim, self.representation_dim) 
+        else:
+            V_emb_shape = (self.representation_dim, self.target_dim)
 
-            # Creation and compilation
-            self.model = Model(inputs=inputs, outputs=self.distribution)       
-            self.model.compile(optimizer=self.optimizer_adam, metrics=self.metrics, loss=self.loss)
+        distribution = Hier(
+            process_hier=self.hier,
+            label2id_path=self.label2id_path,
+            target_dim=self.target_dim,
+            V_emb_shape=V_emb_shape,
+            V_emb_name='hier',
+            return_logit=False,
+            name='output_1'
+        )
+        distribution = distribution(representation)
+
+        # Prepare inputs/outputs list
+        if self.feature:
+            inputs = [left_context, right_context, mention_representation, feature_input]
+        else:
+            inputs = [left_context, right_context, mention_representation]
+
+        outputs = [distribution]
+
+        # Creation and compilation
+        self.model = Model(inputs=inputs, outputs=outputs)       
+        self.model.compile(optimizer=self.optimizer_adam, metrics=self.metrics, loss=self.loss)
 
 
     def get_model_summary(self):
