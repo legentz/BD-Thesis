@@ -230,8 +230,7 @@ class KerasModel:
                         'output_1': target_data
                     })
 
-        if self.model is not None:
-            return self.model.fit_generator(_generate(batcher), steps_per_epoch, callbacks=[on_begin_callback, on_end_callback], epochs=epochs, shuffle=shuffle, verbose=verbose)
+        return self.model.fit_generator(_generate(batcher), steps_per_epoch, callbacks=[on_begin_callback, on_end_callback], epochs=epochs, shuffle=shuffle, verbose=verbose)
 
     def get_predictions(self, batcher, batch_size=1, acc_hook=False, id2label=None, show_results_vector=False, save_as_txt=None, verbose=0):
         assert(self.model is not None)
@@ -240,21 +239,21 @@ class KerasModel:
         print('--> Getting predictions')
 
         context_data, mention_representation_data, target_data, feature_data = batcher.next()
-        results = self.model.predict({
-                'input_1': context_data[:,:self.context_length,:],
-                'input_2': context_data[:,self.context_length+1:,:],
-                'input_3': mention_representation_data
-            }, batch_size=batch_size, verbose=verbose)
+        inputs = dict({
+            'input_1': context_data[:,:self.context_length,:],
+            'input_2': context_data[:,self.context_length+1:,:],
+            'input_3': mention_representation_data
+        })
+
+        if self.feature:
+            inputs['input_4'] = feature_data
+
+        results = self.model.predict(inputs, batch_size=batch_size, verbose=verbose)
 
         if show_results_vector:
             print(results)
 
         if acc_hook:
-            # Make it right...
-            print(results)
-            print(target_data)
-            print(type(results), type(target_data))
-
             hook.acc_hook(results, target_data)
        
             if save_as_txt is not None:
