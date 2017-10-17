@@ -40,6 +40,18 @@ def create_prior(label2id_file):
             prior[int(id),:] = array(code)
     return prior
 
+def get_terminal_dims():
+    rows, columns = popen('stty size', 'r').read().split()
+
+    return rows, columns
+
+def print_centered(to_print):
+    r,c = get_terminal_dims()
+    pattern = str("{: ^" + c + "s}")
+
+    for x in to_print.splitlines():
+        print pattern.format(x)
+
 # Cool!
 def keras_logo():
     keras_logo = '''
@@ -67,11 +79,4 @@ def keras_logo():
 ::::/sssso/:::::::::::::::::/ssssss/::::
 ::::::::::::::::::::::::::::::::::::::::
 '''
-    rows, columns = popen('stty size', 'r').read().split()
-    pattern = str("{: ^" + columns + "s}")
-
-    for line in keras_logo.splitlines():
-        print pattern.format(line)
-
-
-
+    print_centered(keras_logo)
