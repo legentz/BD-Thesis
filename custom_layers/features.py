@@ -7,8 +7,6 @@ from utils import random_uniform_custom
 
 class Feature(Layer):
     def __init__(self, F_emb_shape=None, F_emb_name='', reduce_sum_axis=1, dropout=1, **kwargs):
-        assert(F_emb_shape is not None)
-
         self.F_emb_shape = F_emb_shape
         self.F_emb_name = F_emb_name
         self.reduce_sum_axis = reduce_sum_axis

@@ -7,9 +7,7 @@ from utils import create_prior, random_uniform_custom
 class Hier(Layer):
     def __init__(self,process_hier=False, label2id_path=None, target_dim=None, V_emb_shape=None,
         V_emb_name='hier', return_logit=False, **kwargs):
-
-        assert(V_emb_shape is not None)
-
+    
         self.process_hier = process_hier
         self.V_emb_shape = V_emb_shape
         self.V_emb_name = V_emb_name

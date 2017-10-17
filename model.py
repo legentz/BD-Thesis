@@ -77,6 +77,8 @@ class KerasModel:
         # else:
     def compile_model(self):
 
+        print('--> Compiling model')
+
         # Input tensors
         mention_representation = Input(shape=(self.emb_dim,), name='input_3')
         left_context = Input(shape=(self.context_length, self.emb_dim,), name='input_1')
@@ -165,6 +167,14 @@ class KerasModel:
     def get_model(self):
         if self.model is not None:
             return self.model
+
+    def set_model(self, new_model):
+        if new_model is not None:
+            self.model = new_model
+
+    def set_model_weights(self, weights_path):
+        if self.model is not None:
+            self.model.load_weights(weights_path)
 
     def save_to_json(self, json_path=None, weights_path=None):
         assert(json_path is not None)
