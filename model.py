@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*- 
 
 from __future__ import print_function
-import hook
-import datetime
+
+from shimaoka.hook import hook
 from keras.models import Model, model_from_json
 from keras.layers import Input, add
 from keras.layers.recurrent import LSTM
@@ -16,6 +16,7 @@ from custom_layers.attentions import Attention
 from custom_layers.averaging import Averaging
 from custom_layers.features import Feature
 from custom_layers.hiers import Hier
+import datetime
 
 class KerasModel:
     def __init__(self, hyper=None, **kwargs):

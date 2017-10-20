@@ -20,14 +20,27 @@ def get_true_and_prediction(scores, y_data):
 
 def acc_hook(scores, y_data):
     true_and_prediction = get_true_and_prediction(scores, y_data)
-    print("     strict (p,r,f1):",strict(true_and_prediction))
-    print("loose macro (p,r,f1):",loose_macro(true_and_prediction))
-    print("loose micro (p,r,f1):",loose_micro(true_and_prediction))
+    strict_ = strict(true_and_prediction)
+    loose_macro_ = loose_macro(true_and_prediction)
+    loose_micro_ = loose_micro(true_and_prediction)
+
+    print("     strict (p,r,f1):", strict_)
+    print("loose macro (p,r,f1):", loose_macro_)
+    print("loose micro (p,r,f1):", loose_micro_)
+
+    save_acc_hook(strict_, loose_macro_, loose_micro_)
 
 def save_predictions(scores, y_data, id2label, fname):
     true_and_prediction = get_true_and_prediction(scores, y_data)
     with open(fname,"w") as f:
         for t, p in true_and_prediction:
             f.write(" ".join([id2label[id] for id in t]) + "\t" + " ".join([id2label[id] for id in p]) + "\n")
+    f.close()
+
+def save_acc_hook(strict_, loose_macro_, loose_micro_):
+    with open('acc_hook_loop.log',"a+") as f:
+        f.write("     strict (p,r,f1):" + str(strict_) + "\n")
+        f.write("loose macro (p,r,f1):" + str(loose_macro_) + "\n")
+        f.write("loose micro (p,r,f1):" + str(loose_micro_) + "\n\n")
     f.close()
     

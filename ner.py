@@ -3,8 +3,8 @@
 import datetime, argparse
 from model import KerasModel
 from loader import Loader
-from batcher import Batcher
-from hook import acc_hook, save_predictions 
+from shimaoka.batcher.batcher import Batcher
+from shimaoka.hook.hook import acc_hook, save_predictions 
 from sys import exit
 from utils import print_centered
 
