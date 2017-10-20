@@ -9,3 +9,4 @@ tfenv
 *.json
 *.txt
 config/config.py
+*.log
