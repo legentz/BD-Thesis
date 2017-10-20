@@ -16,7 +16,7 @@ from custom_layers.attentions import Attention
 from custom_layers.averaging import Averaging
 from custom_layers.features import Feature
 from custom_layers.hiers import Hier
-import datetime
+import datetime, sys
 
 class KerasModel:
     def __init__(self, hyper=None, **kwargs):
@@ -127,9 +127,9 @@ class KerasModel:
         return context_representation
 
     def __lstm_encoder(self, left_context, right_context):
-        L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, input_shape=int_shape(left_context))
+        L_LSTM = LSTM(self.lstm_dim, input_shape=int_shape(left_context))
         L_LSTM = L_LSTM(left_context)
-        R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, go_backwards=True)
+        R_LSTM = LSTM(self.lstm_dim, go_backwards=True)
         R_LSTM = R_LSTM(right_context)
 
         context_representation = concatenate([L_LSTM, R_LSTM], axis=1)
@@ -137,14 +137,20 @@ class KerasModel:
         return context_representation
 
     def __attentive_encoder(self, left_context, right_context):
-        L_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(left_context)))
+        L_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(left_context)), merge_mode='concat')
         L_biLSTM = L_biLSTM(left_context)
-        R_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(left_context)))
+        R_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(left_context)), merge_mode='concat')
         R_biLSTM = R_biLSTM(right_context)
 
-        LR_biLSTM = add([L_biLSTM, R_biLSTM])
+        # LR_biLSTM = add([L_biLSTM, R_biLSTM])
+        # Using concatenate() on axis=1 because in NFGEC the list of tensors of Left and Right
+        # are "concatenated" in an list of Tensors (20 elements).
+        # In this case, (None, 10, 200) + (None, 10, 200) = (None, 20, 200)
+        # where 20 is the timesteps or n. of words
+        LR_biLSTM = concatenate([L_biLSTM, R_biLSTM], axis=1)
 
-        context_representation = Attention()(LR_biLSTM)
+        context_representation = Attention(attention_hidden_dim=self.attention_dim)(LR_biLSTM)
+        # context_representation = Attention()([L_biLSTM, R_biLSTM])
 
         return context_representation
 

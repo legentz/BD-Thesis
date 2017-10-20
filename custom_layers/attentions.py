@@ -10,12 +10,17 @@ def dot_(x, kernel):
     return K.squeeze(K.dot(x, K.expand_dims(kernel)), axis=-1)
 
 class Attention(Layer):
-    def __init__(self, **kwargs):
+    def __init__(self, attention_hidden_dim=None, **kwargs):
+        self.attention_hidden_dim = attention_hidden_dim
+
         super(Attention, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        shape_W = (input_shape[-1], input_shape[-1],)
-        shape_u = (input_shape[-1],)
+        if self.attention_hidden_dim is None:
+            self.attention_hidden_dim = input_shape[-1]
+
+        shape_W = (input_shape[-1], self.attention_hidden_dim)
+        shape_u = (self.attention_hidden_dim,)
 
         self.W = self.add_weight(shape_W,
                                  initializer=random_uniform_custom(shape_W, -0.01, 0.01),
@@ -27,8 +32,8 @@ class Attention(Layer):
 
         super(Attention, self).build(input_shape)
 
-    def call(self, x, mask=None):
-        uit = dot_(x, self.W)
+    def call(self, x):
+        uit = K.dot(x, self.W)
         uit = K.tanh(uit)
 
         ait = dot_(uit, self.u)
@@ -39,10 +44,16 @@ class Attention(Layer):
         # a /= K.cast(K.sum(a, axis=1, keepdims=True), K.floatx())
         a /= K.cast(K.sum(a, axis=1, keepdims=True) + K.epsilon(), K.floatx())
         a = K.expand_dims(a)
+        a = K.softmax(a)
 
         weighted_input = x * a
+        weighted_input = K.sum(weighted_input, axis=1)
+        self.output_ = weighted_input
 
-        return K.sum(weighted_input, axis=1)
+        return self.output_
 
     def compute_output_shape(self, input_shape):
-        return input_shape[0], input_shape[-1]
+        if isinstance(input_shape, list):
+            input_shape = input_shape[0]
+
+        return K.int_shape(self.output_)
