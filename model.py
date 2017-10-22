@@ -9,7 +9,7 @@ from keras.layers.recurrent import LSTM
 from keras.layers.wrappers import Bidirectional
 from keras.layers.core import Dropout
 from keras.layers.merge import concatenate
-from keras.backend import int_shape
+from keras.backend import int_shape, learning_phase
 from keras.optimizers import Adam
 from keras.callbacks import LambdaCallback
 from custom_layers.attentions import Attention
@@ -52,7 +52,11 @@ class KerasModel:
         # Metrics and loss
         self.metrics = hyper['metrics']
         self.loss = hyper['loss']
-        self.optimizer_adam = Adam(lr=self.learning_rate)
+
+        if hyper['optimizer'] == 'adam':
+            self.optimizer_adam = Adam(lr=self.learning_rate)
+        else:
+            self.optimizer_adam = hyper['optimizer']
 
         # Representation
         if self.encoder != 'averaging':
@@ -77,6 +81,7 @@ class KerasModel:
             feature_input = Input(shape=(self.feature_input_dim,), dtype='int32', name='input_4')
 
         # Dropout over mention_representation
+        # if train_phase is True, Dropout layer is not applied
         mention_representation_dropout = Dropout(self.dropout)
         mention_representation_dropout = mention_representation_dropout(mention_representation)
 
@@ -127,9 +132,9 @@ class KerasModel:
         return context_representation
 
     def __lstm_encoder(self, left_context, right_context):
-        L_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, input_shape=int_shape(left_context))
+        L_LSTM = LSTM(self.lstm_dim, input_shape=int_shape(left_context))
         L_LSTM = L_LSTM(left_context)
-        R_LSTM = LSTM(self.lstm_dim, recurrent_dropout=self.dropout, go_backwards=True)
+        R_LSTM = LSTM(self.lstm_dim, go_backwards=True)
         R_LSTM = R_LSTM(right_context)
 
         context_representation = concatenate([L_LSTM, R_LSTM], axis=1)
@@ -198,6 +203,9 @@ class KerasModel:
 
         if self.model is not None:
             self.model.load_weights(weights_path)
+
+    def is_learning_phase(self):
+        return learning_phase()
 
     def save_model(self, weights_path=None): # json_path=None
 

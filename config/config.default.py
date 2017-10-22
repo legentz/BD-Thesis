@@ -1,5 +1,5 @@
 # Silence Tensorflow Info and Warning
-import os, sys, datetime
+import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Cool feature!
@@ -35,7 +35,8 @@ config = {
             'label2id_path': './resource/Wiki/label2id_figer.txt'
         },
         'metrics': ['accuracy', 'mae'],
-        'loss': 'binary_crossentropy'
+        'loss': 'binary_crossentropy',
+        'optimizer': 'adam'
     },
     'train': {
         'steps_per_epoch': 2000, # 2000

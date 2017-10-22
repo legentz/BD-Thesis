@@ -24,7 +24,11 @@ class Feature(Layer):
     def call(self, x):
         f_rep = tf.nn.embedding_lookup(self.F, x)
         f_rep = tf.reduce_sum(f_rep, self.reduce_sum_axis)
-        self.f_rep_out = K.dropout(f_rep, self.dropout)
+
+        def dropped_inputs():
+            return K.dropout(f_rep, self.dropout)
+
+        self.f_rep_out = K.in_train_phase(dropped_inputs, f_rep)
 
         return self.f_rep_out
     
