@@ -1,2 +1,4 @@
 # BD-Thesis
-Deep Learning: Named Entity Recognition 
+Deep Learning per il riconoscimento di entita' nominate
+
+...Tutorial is working in progress... 
