@@ -1,7 +1,9 @@
 .DS_Store
 corpus
 data
-resource
+resource/*.txt
+resource/OntoNotes
+resource/Wiki
 *.pyc
 .ipynb_checkpoints/
 tfenv
