@@ -5,6 +5,8 @@ from numpy import zeros, array
 from tensorflow import constant_initializer
 from os import popen
 
+# Create a matrix of shape (...x, y...) initialized
+# with random_uniform values from min_ to max_
 def random_uniform_custom(shape, min_, max_):
     i = uniform(min_, max_, size=shape)
     
@@ -14,6 +16,9 @@ def random_uniform_custom(shape, min_, max_):
     return constant_initializer(i)
 
 # TODO: refactor
+# Credits: Shimaoka et al. (2017)
+# Create a sparse binary matrix where each
+# type is mapped along each column 
 def create_prior(label2id_file):
     nodes = []
     num_label = 0

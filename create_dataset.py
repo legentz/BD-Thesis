@@ -4,7 +4,7 @@ import pickle
 import numpy as np
 import sys
 
-
+# Credits: Shimaoka et al. (2017)
 def create_dataset(corpus_path,label2id,word2id,feature2id):
     num_of_labels = len(label2id.values())
     num_of_samples = sum(1 for line in open(corpus_path))

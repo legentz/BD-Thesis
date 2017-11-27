@@ -97,6 +97,7 @@ class KerasModel:
         if self.encoder == 'attentive':
             context_representation = self.__attentive_encoder(left_context, right_context)
 
+        # Hand-crafted features
         if self.feature:
             feature_representation = self.__process_features(feature_input)
             
@@ -111,6 +112,7 @@ class KerasModel:
                 axis=1
             )
 
+        # Getting the output with Logistic Regression
         distribution = self.__process_hier(representation)
 
         # Prepare inputs/outputs list
@@ -132,6 +134,8 @@ class KerasModel:
         return context_representation
 
     def __lstm_encoder(self, left_context, right_context):
+
+        # LSTMs (left and right) process both left and right context, one going backwards
         L_LSTM = LSTM(self.lstm_dim, input_shape=int_shape(left_context))
         L_LSTM = L_LSTM(left_context)
         R_LSTM = LSTM(self.lstm_dim, go_backwards=True)
@@ -142,6 +146,8 @@ class KerasModel:
         return context_representation
 
     def __attentive_encoder(self, left_context, right_context):
+
+        # biLSTMs (left and right) process both left and right context
         L_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(left_context)))
         L_biLSTM = L_biLSTM(left_context)
         R_biLSTM = Bidirectional(LSTM(self.lstm_dim, return_sequences=True, input_shape=int_shape(left_context)))
@@ -153,12 +159,12 @@ class KerasModel:
 
         return context_representation
 
-    def __process_features(self, feature_input):
+    def __process_features(self, feature_input): 
         feature_representation = Feature(
-            F_emb_shape=(self.feature_size, self.feature_dim),
-            F_emb_name='feat_emb',
-            reduce_sum_axis=1,
-            dropout=self.dropout
+            F_emb_shape=(self.feature_size, self.feature_dim),  # Weight matrix int_shape
+            F_emb_name='feat_emb',                              # Weight matrix name
+            reduce_sum_axis=1,                                  # Axis used along with reduce_sum
+            dropout=self.dropout                                # Dropout value
         )
         feature_representation = feature_representation(feature_input)
 
@@ -170,19 +176,21 @@ class KerasModel:
         else:
             V_emb_shape = (self.representation_dim, self.target_dim)
 
+        # Usually, the distribution is the final output (target).
         distribution = Hier(
-            process_hier=self.hier,
-            label2id_path=self.label2id_path,
-            target_dim=self.target_dim,
-            V_emb_shape=V_emb_shape,
-            V_emb_name='hier',
-            return_logit=False,
-            name='output_1'
+            process_hier=self.hier,             # Use (or not) the Hierarchical Labels
+            label2id_path=self.label2id_path,   # Provide the label2id file path
+            target_dim=self.target_dim,         # Single output dimension (target)
+            V_emb_shape=V_emb_shape,            # Weight matrix shape
+            V_emb_name='hier',                  # Weight matrix name
+            return_logit=False,                 # Return the logit matrix along with the output
+            name='output_1'                     # Name of the output Tensor
         )
         distribution = distribution(representation)
 
         return distribution
 
+    # Show model summarization from the CLI
     def get_model_summary(self, print_fn=None):
         if self.model is not None:
             if print_fn is not None:
@@ -197,6 +205,7 @@ class KerasModel:
         if new_model is not None:
             self.model = new_model
 
+    # Used during loading of an existing model
     def set_model_weights(self, weights_path):
 
         print('--> Restoring model weights')
@@ -204,6 +213,7 @@ class KerasModel:
         if self.model is not None:
             self.model.load_weights(weights_path)
 
+    # Used to know when the model is during the learning phase 
     def is_learning_phase(self):
         return learning_phase()
 
@@ -227,6 +237,7 @@ class KerasModel:
 
         print('--> Training model')
 
+        # Callbacks used to track the training duration
         on_begin_callback = LambdaCallback(
             on_train_begin=lambda logs: print('Started at ', datetime.datetime.now().strftime('%d-%m-%Y_%H:%M'))
         )
@@ -234,6 +245,8 @@ class KerasModel:
             on_train_end=lambda logs: print('Ended at ', datetime.datetime.now().strftime('%d-%m-%Y_%H:%M'))
         )
 
+        # Generator function that yields batches of data.
+        # Used to handle big datasets
         def _generate(batcher):
             while 1:
                 context_data, mention_representation_data, target_data, feature_data = batcher.next()
@@ -264,6 +277,7 @@ class KerasModel:
 
         print('--> Getting predictions')
 
+        # Get the next batch of data and prepare the inputs
         context_data, mention_representation_data, target_data, feature_data = batcher.next()
         inputs = dict({
             'input_1': context_data[:,:self.context_length,:],
@@ -274,14 +288,17 @@ class KerasModel:
         if self.feature:
             inputs['input_4'] = feature_data
 
+        # Get the predicitons
         results = self.model.predict(inputs, batch_size=batch_size, verbose=verbose)
 
+        # (debug) Show predicted vectors
         if show_results_vector:
             print(results)
 
+        # Evaluate with acc_hook module, if required
         if acc_hook:
             hook.acc_hook(results, target_data)
-       
+        
             if save_as_txt is not None:
                 if isinstance(save_as_txt, bool):
                     save_as_txt = 'NO_NAME'

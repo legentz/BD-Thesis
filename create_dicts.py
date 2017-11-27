@@ -5,6 +5,7 @@ import pickle
 import numpy as np
 import sys
 
+# Credits: Shimaoka et al. (2017)
 def load_X2id(file_path):
     X2id = {}
     id2X = {}
